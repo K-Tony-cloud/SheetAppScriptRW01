@@ -9,33 +9,32 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
+// Returns all data with actual spreadsheet row numbers for edit/delete targeting
 function getDashboardData(password) {
   if (password !== ADMIN_PASSWORD) {
     throw new Error("รหัสผ่านไม่ถูกต้อง! ไม่มีสิทธิ์เข้าถึงข้อมูล");
   }
-
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
   const data = sheet.getDataRange().getDisplayValues();
-  
   if (data.length <= 1) return { total: 0, allData: [] };
-  
-  const rows = data.slice(1);
-  return {
-    total: rows.length,
-    allData: rows.reverse() 
-  };
+
+  // Attach actual sheet row number (1-indexed; row 1 = header, row 2 = first data row)
+  const rows = data.slice(1).map((rowData, i) => ({
+    sheetRow: i + 2,
+    data: rowData
+  })).reverse();
+
+  return { total: rows.length, allData: rows };
 }
 
 function submitData(formObject) {
   try {
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
     const lastRow = sheet.getLastRow();
-    
-    // เรียงข้อมูลตั้งแต่คอลัมน์ 1 ถึง 35
     const newRow = [
       lastRow,
-      formObject.col2 || "", formObject.col3 || "", formObject.col4 || "", formObject.col5 || "",
-      formObject.col6 || "", formObject.col7 || "", formObject.col8 || "", formObject.col9 || "",
+      formObject.col2  || "", formObject.col3  || "", formObject.col4  || "", formObject.col5  || "",
+      formObject.col6  || "", formObject.col7  || "", formObject.col8  || "", formObject.col9  || "",
       formObject.col10 || "", formObject.col11 || "", formObject.col12 || "", formObject.col13 || "",
       formObject.col14 || "", formObject.col15 || "", formObject.col16 || "", formObject.col17 || "",
       formObject.col18 || "", formObject.col19 || "", formObject.col20 || "", formObject.col21 || "",
@@ -44,10 +43,48 @@ function submitData(formObject) {
       formObject.col30 || "", formObject.col31 || "", formObject.col32 || "", formObject.col33 || "",
       formObject.col34 || "", formObject.col35 || ""
     ];
-    
     sheet.appendRow(newRow);
     return { success: true, message: "บันทึกข้อมูลสำเร็จ!" };
-  } catch (error) {
-    return { success: false, message: "เกิดข้อผิดพลาด: " + error.toString() };
+  } catch (e) {
+    return { success: false, message: "เกิดข้อผิดพลาด: " + e.toString() };
+  }
+}
+
+function updateData(sheetRowNum, formObject, password) {
+  if (password !== ADMIN_PASSWORD) {
+    return { success: false, message: "ไม่มีสิทธิ์แก้ไขข้อมูล!" };
+  }
+  try {
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    const existingId = sheet.getRange(sheetRowNum, 1).getValue();
+    const updatedRow = [
+      existingId,
+      formObject.col2  || "", formObject.col3  || "", formObject.col4  || "", formObject.col5  || "",
+      formObject.col6  || "", formObject.col7  || "", formObject.col8  || "", formObject.col9  || "",
+      formObject.col10 || "", formObject.col11 || "", formObject.col12 || "", formObject.col13 || "",
+      formObject.col14 || "", formObject.col15 || "", formObject.col16 || "", formObject.col17 || "",
+      formObject.col18 || "", formObject.col19 || "", formObject.col20 || "", formObject.col21 || "",
+      formObject.col22 || "", formObject.col23 || "", formObject.col24 || "", formObject.col25 || "",
+      formObject.col26 || "", formObject.col27 || "", formObject.col28 || "", formObject.col29 || "",
+      formObject.col30 || "", formObject.col31 || "", formObject.col32 || "", formObject.col33 || "",
+      formObject.col34 || "", formObject.col35 || ""
+    ];
+    sheet.getRange(sheetRowNum, 1, 1, updatedRow.length).setValues([updatedRow]);
+    return { success: true, message: "แก้ไขข้อมูลสำเร็จ!" };
+  } catch (e) {
+    return { success: false, message: "เกิดข้อผิดพลาด: " + e.toString() };
+  }
+}
+
+function deleteData(sheetRowNum, password) {
+  if (password !== ADMIN_PASSWORD) {
+    return { success: false, message: "ไม่มีสิทธิ์ลบข้อมูล!" };
+  }
+  try {
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    sheet.deleteRow(sheetRowNum);
+    return { success: true, message: "ลบข้อมูลสำเร็จ!" };
+  } catch (e) {
+    return { success: false, message: "เกิดข้อผิดพลาด: " + e.toString() };
   }
 }

@@ -7,16 +7,14 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
   <style>
-    /* เพิ่ม padding-top เผื่อพื้นที่ให้แถบเมนูที่ถูกตรึงไว้ด้านบน */
     body { background-color: #f4f6f9; font-family: 'Sarabun', sans-serif; color: #333; padding-top: 80px; }
-    
-    /* ตรึง Navbar และเพิ่มเอฟเฟกต์ */
+
     .navbar { background-color: #1a252f !important; z-index: 1030; }
-    
-    .card-form { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px;}
-    .card-header { background-color: #fff; border-bottom: 2px solid #f0f0f0; border-radius: 10px 10px 0 0 !important; font-weight: bold; font-size: 1.1rem;}
+
+    .card-form { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    .card-header { background-color: #fff; border-bottom: 2px solid #f0f0f0; border-radius: 10px 10px 0 0 !important; font-weight: bold; font-size: 1.1rem; }
     .form-label { font-weight: 600; color: #495057; }
-    
+
     .summary-card { transition: all 0.3s ease; cursor: pointer !important; border: 3px solid transparent; border-radius: 12px; }
     .summary-card:hover { transform: translateY(-6px); box-shadow: 0 12px 24px rgba(0,0,0,0.15) !important; }
     .summary-card.active { transform: scale(1.05); border: 3px solid #333; box-shadow: 0 15px 30px rgba(0,0,0,0.2) !important; z-index: 2; }
@@ -27,32 +25,27 @@
     .table thead th { background-color: #e9ecef; border-bottom: 2px solid #dee2e6; color: #495057; cursor: pointer; user-select: none; transition: background 0.2s; position: sticky; top: 0; z-index: 1; }
     .table thead th:hover { background-color: #d1d6db; }
     .table thead th i { color: #888; font-size: 0.8rem; margin-left: 5px; }
-    
+
     .clickable-row { cursor: pointer !important; transition: background 0.2s; }
     .clickable-row td { cursor: pointer !important; }
     .clickable-row:hover { background-color: #e2e6ea !important; }
 
     .btn-massive { padding: 15px 30px; font-size: 1.2rem; border-radius: 8px; font-weight: bold; width: 100%; max-width: 300px; margin: 10px auto; display: block; transition: 0.3s; }
     .btn-massive:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.15) !important; }
-    
+
     .detail-section-title { font-weight: bold; color: #0d6efd; border-bottom: 2px solid #0d6efd; padding-bottom: 5px; margin-top: 15px; margin-bottom: 15px; }
     .detail-label { color: #6c757d; font-size: 0.9rem; margin-bottom: 2px; }
     .detail-value { font-weight: 600; color: #212529; margin-bottom: 12px; }
 
-    /* =========================================
-       ✨ ANIMATION สำหรับหน้า Welcome 
-       ========================================= */
-    /* 1. แอนิเมชันพื้นหลังสีเคลื่อนไหว (Gradient Background) */
     @keyframes gradientMove {
       0% { background-position: 0% 50%; }
       50% { background-position: 100% 50%; }
       100% { background-position: 0% 50%; }
     }
-    .welcome-container { 
-      min-height: 70vh; 
+    .welcome-container {
+      min-height: 70vh;
       display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
       border-radius: 20px;
-      /* กำหนดโทนสีที่ไหลวน */
       background: linear-gradient(-45deg, #ffffff, #e6f0fa, #dce4eb, #f4f6f9);
       background-size: 400% 400%;
       animation: gradientMove 12s ease infinite;
@@ -60,7 +53,6 @@
       padding: 40px;
     }
 
-    /* 2. แอนิเมชันไอคอนลอยขึ้น-ลง (Floating Icon) */
     @keyframes floatIcon {
       0% { transform: translateY(0px); }
       50% { transform: translateY(-15px); }
@@ -68,7 +60,6 @@
     }
     .icon-float { animation: floatIcon 3.5s ease-in-out infinite; }
 
-    /* 3. แอนิเมชันค่อยๆ ลอยขึ้นมา (Fade In Up) */
     @keyframes fadeInUp {
       from { opacity: 0; transform: translateY(30px); }
       to { opacity: 1; transform: translateY(0); }
@@ -77,29 +68,36 @@
     .delay-1 { animation-delay: 0.2s; }
     .delay-2 { animation-delay: 0.4s; }
     .delay-3 { animation-delay: 0.6s; }
+
+    .edit-mode-banner { border-left: 4px solid #ffc107; background: #fff9e6; }
   </style>
 </head>
 <body>
 
+  <!-- ===== NAVBAR ===== -->
   <nav class="navbar navbar-dark shadow-sm fixed-top">
     <div class="container">
       <span class="navbar-brand mb-0 h1" onclick="showView('welcomeView')" style="cursor:pointer; transition: 0.2s;">
         <i class="fas fa-shield-alt text-warning"></i> ระบบฐานข้อมูล สน.พระราชวัง
       </span>
-      <button class="btn btn-outline-light btn-sm d-none" id="btnHome" onclick="showView('welcomeView')">
-        <i class="fas fa-home"></i> หน้าแรก
-      </button>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-light btn-sm d-none" id="btnHome" onclick="showView('welcomeView')">
+          <i class="fas fa-home"></i> หน้าแรก
+        </button>
+        <button class="btn btn-outline-danger btn-sm d-none" id="btnLogout" onclick="logout()">
+          <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
+        </button>
+      </div>
     </div>
   </nav>
 
   <div class="container pb-5 mt-2">
-    
+
+    <!-- ===== WELCOME VIEW ===== -->
     <div id="welcomeView" class="welcome-container">
       <i class="fas fa-landmark text-primary mb-3 icon-float" style="font-size: 5rem; text-shadow: 0 10px 20px rgba(13, 110, 253, 0.2);"></i>
-      
       <h1 class="fw-bold mb-3 fade-up delay-1" style="color: #1a252f;">ระบบฐานข้อมูลผู้มาติดต่อ</h1>
       <p class="text-muted mb-5 fs-5 fade-up delay-2">สถานีตำรวจนครบาลพระราชวัง</p>
-      
       <div class="row w-100 justify-content-center fade-up delay-3">
         <div class="col-md-6 col-lg-4">
           <button class="btn btn-primary btn-massive shadow" onclick="showView('formView')">
@@ -114,12 +112,13 @@
       </div>
     </div>
 
-    <div id="dashboardView" class="d-none fade-up">
+    <!-- ===== DASHBOARD VIEW ===== -->
+    <div id="dashboardView" class="d-none">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="fw-bold"><i class="fas fa-chart-pie text-primary"></i> ข้อมูลสรุป (Admin)</h3>
       </div>
       <p class="text-muted"><i class="fas fa-hand-pointer"></i> คลิกที่การ์ดเพื่อกรองดูข้อมูลในตารางด้านล่าง</p>
-      
+
       <div class="row mb-1">
         <div class="col-12 mb-3">
           <div class="card bg-primary text-white text-center p-3 h-100 shadow-sm summary-card active" id="card-all" onclick="filterByCard('all')">
@@ -128,7 +127,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="row mb-4">
         <div class="col-6 col-md-3 mb-3">
           <div class="card text-white text-center p-3 h-100 shadow-sm summary-card" id="card-male" style="background-color: #0dcaf0;" onclick="filterByCard('male')">
@@ -162,14 +161,12 @@
             <h5 class="mb-0 text-dark"><i class="fas fa-list"></i> รายละเอียดข้อมูล</h5>
             <small class="text-muted">คลิกที่ <span class="text-primary fw-bold">แถวรายชื่อ</span> เพื่อดูข้อมูลทั้งหมด</small>
           </div>
-          
           <div class="col-lg-4 mb-3 mb-lg-0">
             <div class="input-group shadow-sm">
               <span class="input-group-text bg-white border-end-0 text-primary"><i class="fas fa-search"></i></span>
               <input type="text" id="searchInput" class="form-control border-start-0 search-input" placeholder="ค้นหา ชื่อ, เลขบัตร ปชช, เบอร์โทร..." oninput="applyFilters()">
             </div>
           </div>
-
           <div class="col-lg-4 text-lg-end d-flex justify-content-lg-end gap-2 flex-wrap">
             <div class="d-flex align-items-center gap-2">
               <label class="col-form-label fw-bold">เดือน:</label>
@@ -209,16 +206,36 @@
       </div>
     </div>
 
-    <div id="formView" class="d-none fade-up">
-      <h3 class="fw-bold text-center mb-4"><i class="fas fa-file-signature text-primary"></i> แบบฟอร์มลงข้อมูล</h3>
+    <!-- ===== FORM VIEW (Create & Edit) ===== -->
+    <div id="formView" class="d-none">
+      <!-- Edit mode banner (hidden in create mode) -->
+      <div id="editModeBanner" class="d-none alert edit-mode-banner d-flex align-items-center mb-4 mx-auto" style="max-width: 900px;" role="alert">
+        <i class="fas fa-edit me-3 fs-4 text-warning"></i>
+        <div>กำลังแก้ไขข้อมูลของ: <strong id="editModeName" class="text-dark"></strong></div>
+      </div>
+
+      <h3 class="fw-bold text-center mb-4" id="formTitle">
+        <i class="fas fa-file-signature text-primary"></i> แบบฟอร์มลงข้อมูลใหม่
+      </h3>
+
       <form id="dataForm" onsubmit="handleFormSubmit(event)" class="mx-auto" style="max-width: 900px;">
+
+        <!-- Section 1: Personal Info -->
         <div class="card card-form mb-4 border-top border-primary border-4 shadow-sm">
           <div class="card-header text-primary"><i class="fas fa-user"></i> 1. ข้อมูลส่วนตัวเบื้องต้น</div>
           <div class="card-body p-4 bg-white">
             <div class="row">
               <div class="col-md-6 mb-3"><label class="form-label">วันเดือนปี</label><input type="date" class="form-control" name="col2" required></div>
               <div class="col-md-6 mb-3"><label class="form-label">เวลาประมาณ</label><input type="time" class="form-control" name="col3" required></div>
-              <div class="col-md-3 mb-3"><label class="form-label">คำนำหน้า</label><select class="form-select" name="col4"><option value="นาย">นาย</option><option value="นาง">นาง</option><option value="นางสาว">นางสาว</option><option value="อื่นๆ">อื่นๆ</option></select></div>
+              <div class="col-md-3 mb-3">
+                <label class="form-label">คำนำหน้า</label>
+                <select class="form-select" name="col4">
+                  <option value="นาย">นาย</option>
+                  <option value="นาง">นาง</option>
+                  <option value="นางสาว">นางสาว</option>
+                  <option value="อื่นๆ">อื่นๆ</option>
+                </select>
+              </div>
               <div class="col-md-5 mb-3"><label class="form-label">ชื่อ - สกุล</label><input type="text" class="form-control" name="col5" required></div>
               <div class="col-md-4 mb-3"><label class="form-label">อายุ</label><input type="number" class="form-control" name="col6"></div>
               <div class="col-md-6 mb-3"><label class="form-label">เลขบัตร ปชช.</label><input type="text" class="form-control" name="col7" maxlength="13"></div>
@@ -228,28 +245,45 @@
           </div>
         </div>
 
+        <!-- Section 2: Observation -->
         <div class="card card-form mb-4 border-top border-success border-4 shadow-sm">
           <div class="card-header text-success"><i class="fas fa-eye"></i> 2. การตรวจสอบและสังเกตเบื้องต้น</div>
           <div class="card-body p-4 bg-white">
             <div class="row">
-              <div class="col-md-4 mb-3"><label class="form-label">1. การแต่งกาย</label><select class="form-select" name="col10"><option value="ถูกต้อง">ถูกต้อง</option><option value="ไม่ถูกต้อง">ไม่ถูกต้อง</option></select></div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">1. การแต่งกาย</label>
+                <select class="form-select" name="col10"><option value="ถูกต้อง">ถูกต้อง</option><option value="ไม่ถูกต้อง">ไม่ถูกต้อง</option></select>
+              </div>
               <div class="col-md-8 mb-3"><label class="form-label">ระบุรายละเอียด (การแต่งกาย)</label><input type="text" class="form-control" name="col11"></div>
-              <div class="col-md-4 mb-3"><label class="form-label">2. กระเป๋า/อุปกรณ์</label><select class="form-select" name="col12"><option value="ไม่มี">ไม่มี</option><option value="มี">มี</option></select></div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">2. กระเป๋า/อุปกรณ์</label>
+                <select class="form-select" name="col12"><option value="ไม่มี">ไม่มี</option><option value="มี">มี</option></select>
+              </div>
               <div class="col-md-8 mb-3"><label class="form-label">ระบุรายละเอียด (กระเป๋า)</label><input type="text" class="form-control" name="col13"></div>
-              <div class="col-md-4 mb-3"><label class="form-label">3. การพูดคุยรู้เรื่อง</label><select class="form-select" name="col14"><option value="ปกติ">ปกติ</option><option value="ไม่ปกติ">ไม่ปกติ</option></select></div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">3. การพูดคุยรู้เรื่อง</label>
+                <select class="form-select" name="col14"><option value="ปกติ">ปกติ</option><option value="ไม่ปกติ">ไม่ปกติ</option></select>
+              </div>
               <div class="col-md-8 mb-3"><label class="form-label">ระบุรายละเอียด (การพูดคุย)</label><input type="text" class="form-control" name="col15"></div>
-              <div class="col-md-4 mb-3"><label class="form-label">4. เคยมารับเสด็จหรือไม่</label><select class="form-select" name="col16"><option value="ไม่เคย">ไม่เคย</option><option value="เคย">เคย</option></select></div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">4. เคยมารับเสด็จหรือไม่</label>
+                <select class="form-select" name="col16"><option value="ไม่เคย">ไม่เคย</option><option value="เคย">เคย</option></select>
+              </div>
               <div class="col-md-8 mb-3"><label class="form-label">ระบุรายละเอียด (รับเสด็จ)</label><input type="text" class="form-control" name="col17"></div>
             </div>
           </div>
         </div>
 
+        <!-- Section 3: Complaint -->
         <div class="card card-form mb-4 border-top border-danger border-4 shadow-sm">
           <div class="card-header text-danger"><i class="fas fa-file-alt"></i> 3. รายละเอียดเรื่องร้องเรียนและการเดินทาง</div>
           <div class="card-body p-4 bg-white">
             <div class="row">
               <div class="col-12 mb-3"><label class="form-label">1. เป็นเรื่องอะไร โดยสังเขป</label><textarea class="form-control" name="col18" rows="2"></textarea></div>
-              <div class="col-md-4 mb-3"><label class="form-label">2. เคยยื่นร้องเรียนหน่วยใดหรือไม่</label><select class="form-select" name="col19"><option value="ไม่เคย">ไม่เคย</option><option value="เคย">เคย</option></select></div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">2. เคยยื่นร้องเรียนหน่วยใดหรือไม่</label>
+                <select class="form-select" name="col19"><option value="ไม่เคย">ไม่เคย</option><option value="เคย">เคย</option></select>
+              </div>
               <div class="col-md-8 mb-3"><label class="form-label">ระบุ (หน่วยใด/ผลอย่างไร)</label><input type="text" class="form-control" name="col20"></div>
               <div class="col-md-6 mb-3"><label class="form-label">3. ทราบเรื่องการถวายฎีกาจากที่ใด</label><input type="text" class="form-control" name="col21"></div>
               <div class="col-md-6 mb-3"><label class="form-label">4. เดินทางมาจากจังหวัดใด</label><input type="text" class="form-control" name="col22"></div>
@@ -259,6 +293,7 @@
           </div>
         </div>
 
+        <!-- Section 4: Contact -->
         <div class="card card-form mb-4 border-top border-warning border-4 shadow-sm">
           <div class="card-header text-warning text-dark"><i class="fas fa-address-book"></i> 4. บุคคลที่สามารถติดต่อได้</div>
           <div class="card-body p-4 bg-white">
@@ -270,13 +305,17 @@
           </div>
         </div>
 
+        <!-- Section 5: Deep Info -->
         <div class="card card-form mb-4 border-top border-info border-4 shadow-sm">
           <div class="card-header text-info text-dark"><i class="fas fa-search"></i> 5. ข้อมูลเชิงลึก</div>
           <div class="card-body p-4 bg-white">
             <div class="row">
               <div class="col-12 mb-3"><label class="form-label">8. ความตั้งใจในวันนี้</label><textarea class="form-control" name="col28" rows="2"></textarea></div>
               <div class="col-12 mb-3"><label class="form-label">9. ทราบจากที่ใดว่าวันนี้จะมีขบวนเสด็จฯ</label><input type="text" class="form-control" name="col29"></div>
-              <div class="col-md-4 mb-3"><label class="form-label">10. เคยเดินทางมายื่นถวายฎีกาที่นี่หรือไม่</label><select class="form-select" name="col30"><option value="ไม่เคย">ไม่เคย</option><option value="เคย">เคย</option></select></div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">10. เคยเดินทางมายื่นถวายฎีกาที่นี่หรือไม่</label>
+                <select class="form-select" name="col30"><option value="ไม่เคย">ไม่เคย</option><option value="เคย">เคย</option></select>
+              </div>
               <div class="col-md-8 mb-3"><label class="form-label">ระบุรายละเอียด (ถ้าเคย)</label><input type="text" class="form-control" name="col31"></div>
               <div class="col-12 mb-3"><label class="form-label">11. ได้ยื่นถวายฎีกาที่อื่น/จุดใด ก่อนเดินทางมา สน. หรือไม่</label><input type="text" class="form-control" name="col32"></div>
               <div class="col-12 mb-3"><label class="form-label">12. เคยเดินทางมายื่นถวายฎีกาที่อื่น นอกจากพระบรมมหาราชวัง หรือไม่</label><input type="text" class="form-control" name="col33"></div>
@@ -286,29 +325,55 @@
           </div>
         </div>
 
-        <div class="d-grid gap-2 mb-5">
-          <button type="submit" class="btn btn-primary btn-lg shadow" id="submitBtn"><i class="fas fa-save"></i> บันทึกข้อมูลเข้าฐานข้อมูล</button>
+        <!-- Form Action Buttons -->
+        <div class="d-grid gap-2 mb-2" style="max-width: 900px; margin: 0 auto;">
+          <button type="submit" class="btn btn-primary btn-lg shadow" id="submitBtn">
+            <i class="fas fa-save"></i> บันทึกข้อมูลเข้าฐานข้อมูล
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-lg d-none" id="cancelEditBtn" onclick="cancelEdit()">
+            <i class="fas fa-arrow-left"></i> ยกเลิก / กลับไป Dashboard
+          </button>
         </div>
       </form>
     </div>
 
+  </div><!-- /container -->
+
+  <!-- ===== TOAST NOTIFICATION ===== -->
+  <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999">
+    <div id="mainToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body fw-bold" id="toastBody">ข้อความ</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>
   </div>
 
+  <!-- ===== DETAIL MODAL ===== -->
   <div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content shadow">
         <div class="modal-header bg-primary text-white">
-          <h5 class="modal-title"><i class="fas fa-id-card"></i> ข้อมูลผู้มาติดต่อฉบับเต็ม</h5>
+          <h5 class="modal-title"><i class="fas fa-id-card"></i> <span id="detailModalTitle">ข้อมูลผู้มาติดต่อ</span></h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body bg-light" id="detailModalBody"></div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
+          <button type="button" class="btn btn-warning" onclick="openEditFromModal()">
+            <i class="fas fa-edit"></i> แก้ไขข้อมูล
+          </button>
+          <button type="button" class="btn btn-danger" onclick="openDeleteConfirm()">
+            <i class="fas fa-trash-alt"></i> ลบข้อมูล
+          </button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="fas fa-times"></i> ปิด
+          </button>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- ===== LOGIN MODAL ===== -->
   <div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content border-0 shadow-lg">
@@ -320,168 +385,259 @@
           <div class="modal-body text-center p-4">
             <label class="form-label fw-bold">กรุณาใส่รหัสผ่านเพื่อเข้าสู่ระบบ</label>
             <input type="password" id="adminPasswordInput" class="form-control form-control-lg text-center bg-light" placeholder="ใส่รหัสผ่านแล้วกด Enter" required>
-            <div id="loginError" class="text-danger mt-2 d-none fw-bold"><i class="fas fa-exclamation-circle"></i> รหัสผ่านไม่ถูกต้อง!</div>
+            <div id="loginError" class="text-danger mt-2 d-none fw-bold">
+              <i class="fas fa-exclamation-circle"></i> รหัสผ่านไม่ถูกต้อง!
+            </div>
+            <div id="loginSpinner" class="mt-2 d-none text-muted">
+              <i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบ...
+            </div>
           </div>
           <div class="modal-footer justify-content-center bg-light border-top-0">
-            <button type="submit" class="btn btn-primary px-4"><i class="fas fa-sign-in-alt"></i> เข้าสู่ระบบ</button>
+            <button type="submit" class="btn btn-primary px-4" id="loginBtn">
+              <i class="fas fa-sign-in-alt"></i> เข้าสู่ระบบ
+            </button>
           </div>
         </form>
       </div>
     </div>
   </div>
 
+  <!-- ===== DELETE CONFIRM MODAL ===== -->
+  <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> ยืนยันการลบข้อมูล</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body text-center p-4">
+          <i class="fas fa-trash-alt text-danger mb-3" style="font-size: 3rem;"></i>
+          <p class="fs-5">คุณต้องการลบข้อมูลของ</p>
+          <p class="fw-bold fs-4 text-danger" id="deleteConfirmName"></p>
+          <p class="text-muted">การลบข้อมูลนี้ไม่สามารถกู้คืนได้</p>
+        </div>
+        <div class="modal-footer justify-content-center gap-2">
+          <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">
+            <i class="fas fa-times"></i> ยกเลิก
+          </button>
+          <button type="button" class="btn btn-danger px-4" id="confirmDeleteBtn" onclick="executeDelete()">
+            <i class="fas fa-trash-alt"></i> ยืนยันการลบ
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    let loginModal, detailModal;
-    let globalData = []; 
-    let filteredData = []; 
+    // ==================== STATE ====================
+    let loginModal, detailModal, deleteConfirmModal, toastInstance;
+    let adminSession = null;        // stores admin password after login
+    let globalData   = [];          // [{ sheetRow: N, data: [...35 cols...] }, ...]
+    let filteredData = [];
+    let currentViewItem = null;     // currently open detail record
+    let editSheetRow = null;        // null = create mode, number = edit mode
     let sortCol = -1;
     let sortAsc = true;
     let activeCardFilter = 'all';
 
+    // ==================== INIT ====================
     document.addEventListener("DOMContentLoaded", function() {
-      loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-      detailModal = new bootstrap.Modal(document.getElementById('detailModal'));
-      
-      document.getElementById('loginModal').addEventListener('shown.bs.modal', function () {
+      loginModal       = new bootstrap.Modal(document.getElementById('loginModal'));
+      detailModal      = new bootstrap.Modal(document.getElementById('detailModal'));
+      deleteConfirmModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+
+      document.getElementById('loginModal').addEventListener('shown.bs.modal', function() {
         document.getElementById('adminPasswordInput').focus();
       });
     });
 
-    function fixMissingZero(val, type) {
-      if (!val) return "-";
-      let str = val.toString().trim();
-      if (type === 'phone' && /^[1-9]\d{7,8}$/.test(str)) return '0' + str;
-      if (type === 'idcard' && /^[1-9]\d{11}$/.test(str)) return '0' + str;
-      return str;
-    }
-
+    // ==================== NAVIGATION ====================
     function showView(viewId) {
-      document.getElementById('welcomeView').classList.add('d-none');
-      document.getElementById('dashboardView').classList.add('d-none');
-      document.getElementById('formView').classList.add('d-none');
-      
-      let view = document.getElementById(viewId);
-      view.classList.remove('d-none');
-
-      // เลื่อนจอกลับไปบนสุดเสมอเมื่อเปลี่ยนหน้า
+      ['welcomeView', 'dashboardView', 'formView'].forEach(id => {
+        document.getElementById(id).classList.add('d-none');
+      });
+      document.getElementById(viewId).classList.remove('d-none');
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
-      let btnHome = document.getElementById('btnHome');
-      if(viewId === 'welcomeView') btnHome.classList.add('d-none');
-      else btnHome.classList.remove('d-none');
+      const btnHome   = document.getElementById('btnHome');
+      const btnLogout = document.getElementById('btnLogout');
+
+      if (viewId === 'welcomeView') {
+        btnHome.classList.add('d-none');
+        btnLogout.classList.add('d-none');
+        resetFormMode();
+      } else {
+        btnHome.classList.remove('d-none');
+        if (adminSession) btnLogout.classList.remove('d-none');
+      }
     }
 
+    function logout() {
+      adminSession = null;
+      globalData = [];
+      filteredData = [];
+      sortCol = -1;
+      sortAsc = true;
+      activeCardFilter = 'all';
+      showView('welcomeView');
+      showToast('ออกจากระบบเรียบร้อยแล้ว', 'secondary');
+    }
+
+    // ==================== TOAST ====================
+    function showToast(message, type) {
+      const toastEl = document.getElementById('mainToast');
+      toastEl.className = 'toast align-items-center border-0 text-bg-' + (type || 'success');
+      document.getElementById('toastBody').textContent = message;
+      if (!toastInstance) {
+        toastInstance = new bootstrap.Toast(toastEl, { delay: 4000 });
+      }
+      toastInstance.show();
+    }
+
+    // ==================== ADMIN LOGIN ====================
     function verifyAdmin() {
-      let pwd = document.getElementById('adminPasswordInput').value;
-      let errorText = document.getElementById('loginError');
-      
+      const pwd = document.getElementById('adminPasswordInput').value;
+      const errorEl   = document.getElementById('loginError');
+      const spinnerEl = document.getElementById('loginSpinner');
+      const btnEl     = document.getElementById('loginBtn');
+
+      errorEl.classList.add('d-none');
+      spinnerEl.classList.remove('d-none');
+      btnEl.disabled = true;
+
       google.script.run
         .withSuccessHandler(function(data) {
-          errorText.classList.add('d-none');
+          spinnerEl.classList.add('d-none');
+          btnEl.disabled = false;
+          errorEl.classList.add('d-none');
           loginModal.hide();
-          document.getElementById('adminPasswordInput').value = "";
-          
-          globalData = data.allData; 
-          filteredData = [...globalData]; 
-          
-          populateYearDropdown(); 
-          applyFilters(); 
-          
+          document.getElementById('adminPasswordInput').value = '';
+
+          adminSession = pwd;
+          globalData   = data.allData;
+          filteredData = [...globalData];
+
+          populateYearDropdown();
+          applyFilters();
           showView('dashboardView');
         })
         .withFailureHandler(function(error) {
-          errorText.classList.remove('d-none');
+          spinnerEl.classList.add('d-none');
+          btnEl.disabled = false;
+          errorEl.classList.remove('d-none');
+          errorEl.textContent = error.message || 'รหัสผ่านไม่ถูกต้อง!';
         })
         .getDashboardData(pwd);
     }
 
+    // ==================== DASHBOARD HELPERS ====================
+    function refreshDashboard() {
+      google.script.run
+        .withSuccessHandler(function(data) {
+          globalData   = data.allData;
+          filteredData = [...globalData];
+          populateYearDropdown();
+          applyFilters();
+          showView('dashboardView');
+        })
+        .withFailureHandler(function(error) {
+          showToast('ไม่สามารถโหลดข้อมูลได้: ' + error.message, 'danger');
+        })
+        .getDashboardData(adminSession);
+    }
+
     function populateYearDropdown() {
-      let yearSelect = document.getElementById("yearFilter");
-      let years = new Set();
-      globalData.forEach(row => {
-        let dateStr = row[1] || "";
-        let match = dateStr.match(/\d{2,4}$/); 
+      const yearSelect = document.getElementById('yearFilter');
+      const years = new Set();
+      globalData.forEach(item => {
+        const dateStr = item.data[1] || '';
+        const match = dateStr.match(/\d{2,4}$/);
         if (match) {
           let y = match[0];
-          if (y.length === 2) y = "25" + y; 
+          if (y.length === 2) y = '25' + y;
           years.add(y);
         }
       });
       yearSelect.innerHTML = '<option value="all">ทุกปี</option>';
-      Array.from(years).sort((a,b)=>b-a).forEach(y => {
-        yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+      Array.from(years).sort((a, b) => b - a).forEach(y => {
+        yearSelect.innerHTML += '<option value="' + y + '">' + y + '</option>';
       });
     }
 
     function filterByCard(type) {
       activeCardFilter = type;
-      document.querySelectorAll('.summary-card').forEach(card => card.classList.remove('active'));
+      document.querySelectorAll('.summary-card').forEach(c => c.classList.remove('active'));
       document.getElementById('card-' + type).classList.add('active');
-      applyFilters(); 
+      applyFilters();
     }
 
     function applyFilters() {
-      let mFilter = document.getElementById("monthFilter").value;
-      let yFilter = document.getElementById("yearFilter").value;
-      let searchText = document.getElementById("searchInput").value.toLowerCase().trim();
+      const mFilter    = document.getElementById('monthFilter').value;
+      const yFilter    = document.getElementById('yearFilter').value;
+      const searchText = document.getElementById('searchInput').value.toLowerCase().trim();
 
-      let dateFilteredData = globalData.filter(row => {
-        let dateStr = row[1] || "";
-        let matchMonth = (mFilter === "all") || dateStr.includes(mFilter);
-        let matchYear = (yFilter === "all") || dateStr.includes(yFilter) || dateStr.endsWith(yFilter.substring(2));
+      let result = globalData.filter(item => {
+        const dateStr    = item.data[1] || '';
+        const matchMonth = (mFilter === 'all') || dateStr.includes(mFilter);
+        const matchYear  = (yFilter === 'all') || dateStr.includes(yFilter) || dateStr.endsWith(yFilter.substring(2));
         return matchMonth && matchYear;
       });
 
-      let searchFilteredData = dateFilteredData.filter(row => {
-        if (searchText === "") return true; 
-        let fullName = (row[3] || "") + " " + (row[4] || ""); 
-        let idCard = fixMissingZero(row[6], 'idcard'); 
-        let phone = fixMissingZero(row[8], 'phone'); 
-        let topic = (row[17] || ""); 
-        return fullName.toLowerCase().includes(searchText) || idCard.includes(searchText) || phone.includes(searchText) || topic.toLowerCase().includes(searchText);
+      result = result.filter(item => {
+        if (!searchText) return true;
+        const fullName = (item.data[3] || '') + ' ' + (item.data[4] || '');
+        const idCard   = fixMissingZero(item.data[6], 'idcard');
+        const phone    = fixMissingZero(item.data[8], 'phone');
+        const topic    = (item.data[17] || '');
+        return fullName.toLowerCase().includes(searchText) ||
+               idCard.includes(searchText) ||
+               phone.includes(searchText) ||
+               topic.toLowerCase().includes(searchText);
       });
 
-      updateSummaryCards(searchFilteredData); 
+      updateSummaryCards(result);
 
-      filteredData = searchFilteredData.filter(row => {
-        let prefix = (row[3] || "").trim();
-        let isReturn = (row[29] || "").trim();
-        if (activeCardFilter === 'male') return (prefix === "นาย" || prefix === "ด.ช.");
-        if (activeCardFilter === 'female') return (prefix === "นาง" || prefix === "นางสาว" || prefix === "น.ส." || prefix === "ด.ญ.");
-        if (activeCardFilter === 'first') return (isReturn !== "เคย");
-        if (activeCardFilter === 'return') return (isReturn === "เคย");
-        return true; 
+      filteredData = result.filter(item => {
+        const prefix   = (item.data[3] || '').trim();
+        const isReturn = (item.data[29] || '').trim();
+        if (activeCardFilter === 'male')   return (prefix === 'นาย' || prefix === 'ด.ช.');
+        if (activeCardFilter === 'female') return (prefix === 'นาง' || prefix === 'นางสาว' || prefix === 'น.ส.' || prefix === 'ด.ญ.');
+        if (activeCardFilter === 'first')  return (isReturn !== 'เคย');
+        if (activeCardFilter === 'return') return (isReturn === 'เคย');
+        return true;
       });
 
-      if(sortCol > -1) {
-         let tempAsc = sortAsc; 
-         sortAsc = !tempAsc; 
-         sortTable(sortCol, isNaN(filteredData[0]?.[sortCol]) ? 'str' : 'num');
-      } else {
-         renderTable(filteredData);
+      // Re-apply existing sort without toggling direction
+      if (sortCol > -1) {
+        filteredData.sort((a, b) => {
+          const valA = (a.data[sortCol] || '').toString();
+          const valB = (b.data[sortCol] || '').toString();
+          if (!isNaN(valA) && !isNaN(valB)) {
+            return sortAsc ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
+          }
+          return sortAsc ? valA.localeCompare(valB, 'th') : valB.localeCompare(valA, 'th');
+        });
       }
+
+      renderTable(filteredData);
     }
 
     function updateSummaryCards(dataArray) {
-      let total = dataArray.length;
       let male = 0, female = 0, firstTime = 0, returnee = 0;
-
-      dataArray.forEach(row => {
-        let prefix = (row[3] || "").trim(); 
-        if (prefix === "นาย" || prefix === "ด.ช.") male++;
-        else if (prefix === "นาง" || prefix === "นางสาว" || prefix === "น.ส." || prefix === "ด.ญ.") female++;
-
-        let isReturn = (row[29] || "").trim();
-        if (isReturn === "เคย") returnee++;
+      dataArray.forEach(item => {
+        const prefix   = (item.data[3] || '').trim();
+        const isReturn = (item.data[29] || '').trim();
+        if (prefix === 'นาย' || prefix === 'ด.ช.') male++;
+        else if (prefix === 'นาง' || prefix === 'นางสาว' || prefix === 'น.ส.' || prefix === 'ด.ญ.') female++;
+        if (isReturn === 'เคย') returnee++;
         else firstTime++;
       });
-
-      document.getElementById("totalCount").innerText = total + " ราย";
-      document.getElementById("maleCount").innerText = male + " ราย";
-      document.getElementById("femaleCount").innerText = female + " ราย";
-      document.getElementById("firstTimeCount").innerText = firstTime + " ราย";
-      document.getElementById("returnCount").innerText = returnee + " ราย";
+      document.getElementById('totalCount').textContent     = dataArray.length + ' ราย';
+      document.getElementById('maleCount').textContent      = male      + ' ราย';
+      document.getElementById('femaleCount').textContent    = female    + ' ราย';
+      document.getElementById('firstTimeCount').textContent = firstTime + ' ราย';
+      document.getElementById('returnCount').textContent    = returnee  + ' ราย';
     }
 
     function sortTable(colIndex, type) {
@@ -489,143 +645,284 @@
       else { sortAsc = true; sortCol = colIndex; }
 
       document.querySelectorAll('th i').forEach(icon => icon.className = 'fas fa-sort text-muted');
-      let currentIcon = document.getElementById('icon-' + colIndex);
-      if(currentIcon) currentIcon.className = sortAsc ? 'fas fa-sort-up text-primary' : 'fas fa-sort-down text-primary';
+      const icon = document.getElementById('icon-' + colIndex);
+      if (icon) icon.className = sortAsc ? 'fas fa-sort-up text-primary' : 'fas fa-sort-down text-primary';
 
       filteredData.sort((a, b) => {
-        let valA = a[colIndex] ? a[colIndex].toString() : "";
-        let valB = b[colIndex] ? b[colIndex].toString() : "";
-
-        if (type === 'num') return sortAsc ? (Number(valA) - Number(valB)) : (Number(valB) - Number(valA));
-        else return sortAsc ? valA.localeCompare(valB, 'th') : valB.localeCompare(valA, 'th');
+        const valA = (a.data[colIndex] || '').toString();
+        const valB = (b.data[colIndex] || '').toString();
+        if (type === 'num') return sortAsc ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
+        return sortAsc ? valA.localeCompare(valB, 'th') : valB.localeCompare(valA, 'th');
       });
 
       renderTable(filteredData);
     }
 
     function renderTable(dataArray) {
-      let tbody = document.getElementById("tableBody");
-      let html = "";
-      
-      dataArray.forEach((row, index) => {
-        html += `<tr class="clickable-row" onclick="viewDetails(${index})">
-                  <td class="text-center">${row[0] || "-"}</td>
-                  <td>${row[1] || "-"}</td>
-                  <td>${row[2] || "-"}</td>
-                  <td class="fw-bold text-primary">${row[3] || ""} ${row[4] || "-"}</td>
-                  <td class="text-truncate" style="max-width: 250px;">${row[17] || "-"}</td>
-                 </tr>`;
+      const tbody = document.getElementById('tableBody');
+      let html = '';
+      dataArray.forEach((item, index) => {
+        const d = item.data;
+        html += '<tr class="clickable-row" onclick="viewDetails(' + index + ')">' +
+                  '<td class="text-center">' + (d[0] || '-') + '</td>' +
+                  '<td>' + (d[1] || '-') + '</td>' +
+                  '<td>' + (d[2] || '-') + '</td>' +
+                  '<td class="fw-bold text-primary">' + (d[3] || '') + ' ' + (d[4] || '-') + '</td>' +
+                  '<td class="text-truncate" style="max-width: 250px;">' + (d[17] || '-') + '</td>' +
+                '</tr>';
       });
-      tbody.innerHTML = html || "<tr><td colspan='5' class='text-center py-4 text-danger fw-bold'><i class='fas fa-search'></i> ไม่พบข้อมูลที่ตรงกับการค้นหา</td></tr>";
+      tbody.innerHTML = html || '<tr><td colspan="5" class="text-center py-4 text-danger fw-bold"><i class="fas fa-search"></i> ไม่พบข้อมูลที่ตรงกับการค้นหา</td></tr>';
     }
 
+    // ==================== DETAIL MODAL ====================
     function viewDetails(index) {
-      let row = filteredData[index];
-      let modalBody = document.getElementById("detailModalBody");
+      currentViewItem = filteredData[index];
+      const row = currentViewItem.data;
 
-      let idCard = fixMissingZero(row[6], 'idcard');
-      let phone1 = fixMissingZero(row[8], 'phone');
-      let phone2 = fixMissingZero(row[26], 'phone');
+      const idCard = fixMissingZero(row[6], 'idcard');
+      const phone1 = fixMissingZero(row[8], 'phone');
+      const phone2 = fixMissingZero(row[26], 'phone');
 
-      let html = `
-        <div class="card p-3 mb-3 border-0 shadow-sm">
-          <div class="detail-section-title"><i class="fas fa-user"></i> 1. ข้อมูลส่วนตัวเบื้องต้น</div>
-          <div class="row">
-            <div class="col-md-6"><div class="detail-label">วันเดือนปี:</div><div class="detail-value">${row[1] || "-"}</div></div>
-            <div class="col-md-6"><div class="detail-label">เวลาประมาณ:</div><div class="detail-value">${row[2] || "-"}</div></div>
-            <div class="col-md-6"><div class="detail-label">ชื่อ - สกุล:</div><div class="detail-value">${row[3] || ""} ${row[4] || "-"}</div></div>
-            <div class="col-md-6"><div class="detail-label">อายุ:</div><div class="detail-value">${row[5] ? row[5]+" ปี" : "-"}</div></div>
-            <div class="col-md-6"><div class="detail-label">เลขบัตร ปชช:</div><div class="detail-value">${idCard}</div></div>
-            <div class="col-md-6"><div class="detail-label">เบอร์โทร:</div><div class="detail-value">${phone1}</div></div>
-            <div class="col-12"><div class="detail-label">ที่อยู่ปัจจุบัน:</div><div class="detail-value">${row[7] || "-"}</div></div>
-          </div>
-        </div>
+      document.getElementById('detailModalTitle').textContent = 'ข้อมูล: ' + (row[3] || '') + ' ' + (row[4] || '');
 
-        <div class="card p-3 mb-3 border-0 shadow-sm">
-          <div class="detail-section-title text-success" style="border-color: #198754;"><i class="fas fa-eye"></i> 2. การตรวจสอบและสังเกตเบื้องต้น</div>
-          <div class="row">
-            <div class="col-md-4"><div class="detail-label">1. การแต่งกาย:</div><div class="detail-value">${row[9] || "-"}</div></div>
-            <div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">${row[10] || "-"}</div></div>
-            <div class="col-md-4"><div class="detail-label">2. กระเป๋า/อุปกรณ์:</div><div class="detail-value">${row[11] || "-"}</div></div>
-            <div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">${row[12] || "-"}</div></div>
-            <div class="col-md-4"><div class="detail-label">3. การพูดคุยรู้เรื่อง:</div><div class="detail-value">${row[13] || "-"}</div></div>
-            <div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">${row[14] || "-"}</div></div>
-            <div class="col-md-4"><div class="detail-label">4. เคยมารับเสด็จหรือไม่:</div><div class="detail-value">${row[15] || "-"}</div></div>
-            <div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">${row[16] || "-"}</div></div>
-          </div>
-        </div>
+      document.getElementById('detailModalBody').innerHTML =
+        '<div class="card p-3 mb-3 border-0 shadow-sm">' +
+          '<div class="detail-section-title"><i class="fas fa-user"></i> 1. ข้อมูลส่วนตัวเบื้องต้น</div>' +
+          '<div class="row">' +
+            '<div class="col-md-6"><div class="detail-label">วันเดือนปี:</div><div class="detail-value">' + (row[1]||'-') + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">เวลาประมาณ:</div><div class="detail-value">' + (row[2]||'-') + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">ชื่อ - สกุล:</div><div class="detail-value">' + (row[3]||'') + ' ' + (row[4]||'-') + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">อายุ:</div><div class="detail-value">' + (row[5] ? row[5]+' ปี' : '-') + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">เลขบัตร ปชช:</div><div class="detail-value">' + idCard + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">เบอร์โทร:</div><div class="detail-value">' + phone1 + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">ที่อยู่ปัจจุบัน:</div><div class="detail-value">' + (row[7]||'-') + '</div></div>' +
+          '</div>' +
+        '</div>' +
 
-        <div class="card p-3 mb-3 border-0 shadow-sm">
-          <div class="detail-section-title text-danger" style="border-color: #dc3545;"><i class="fas fa-file-alt"></i> 3. รายละเอียดเรื่องร้องเรียน</div>
-          <div class="row">
-            <div class="col-12"><div class="detail-label">1. เป็นเรื่องอะไร โดยสังเขป:</div><div class="detail-value">${row[17] || "-"}</div></div>
-            <div class="col-md-4"><div class="detail-label">2. เคยยื่นร้องเรียนหน่วยใด:</div><div class="detail-value">${row[18] || "-"}</div></div>
-            <div class="col-md-8"><div class="detail-label">ระบุ (หน่วยใด/ผลอย่างไร):</div><div class="detail-value">${row[19] || "-"}</div></div>
-            <div class="col-md-6"><div class="detail-label">3. ทราบเรื่องจากที่ใด:</div><div class="detail-value">${row[20] || "-"}</div></div>
-            <div class="col-md-6"><div class="detail-label">4. เดินทางมาจากจังหวัดใด:</div><div class="detail-value">${row[21] || "-"}</div></div>
-            <div class="col-md-6"><div class="detail-label">5. สถานที่พักใน กทม:</div><div class="detail-value">${row[22] || "-"}</div></div>
-            <div class="col-md-6"><div class="detail-label">6. ใช้ยานพาหนะอะไร:</div><div class="detail-value">${row[23] || "-"}</div></div>
-          </div>
-        </div>
+        '<div class="card p-3 mb-3 border-0 shadow-sm">' +
+          '<div class="detail-section-title text-success" style="border-color:#198754"><i class="fas fa-eye"></i> 2. การตรวจสอบและสังเกตเบื้องต้น</div>' +
+          '<div class="row">' +
+            '<div class="col-md-4"><div class="detail-label">1. การแต่งกาย:</div><div class="detail-value">' + (row[9]||'-') + '</div></div>' +
+            '<div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">' + (row[10]||'-') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">2. กระเป๋า/อุปกรณ์:</div><div class="detail-value">' + (row[11]||'-') + '</div></div>' +
+            '<div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">' + (row[12]||'-') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">3. การพูดคุยรู้เรื่อง:</div><div class="detail-value">' + (row[13]||'-') + '</div></div>' +
+            '<div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">' + (row[14]||'-') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">4. เคยมารับเสด็จหรือไม่:</div><div class="detail-value">' + (row[15]||'-') + '</div></div>' +
+            '<div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">' + (row[16]||'-') + '</div></div>' +
+          '</div>' +
+        '</div>' +
 
-        <div class="card p-3 mb-3 border-0 shadow-sm">
-          <div class="detail-section-title text-warning" style="border-color: #ffc107;"><i class="fas fa-address-book"></i> 4. บุคคลที่สามารถติดต่อได้</div>
-          <div class="row">
-            <div class="col-md-4"><div class="detail-label">7. ชื่อ - สกุล:</div><div class="detail-value">${row[24] || "-"}</div></div>
-            <div class="col-md-4"><div class="detail-label">เกี่ยวข้องเป็น:</div><div class="detail-value">${row[25] || "-"}</div></div>
-            <div class="col-md-4"><div class="detail-label">เบอร์โทร:</div><div class="detail-value">${phone2}</div></div>
-          </div>
-        </div>
+        '<div class="card p-3 mb-3 border-0 shadow-sm">' +
+          '<div class="detail-section-title text-danger" style="border-color:#dc3545"><i class="fas fa-file-alt"></i> 3. รายละเอียดเรื่องร้องเรียน</div>' +
+          '<div class="row">' +
+            '<div class="col-12"><div class="detail-label">1. เป็นเรื่องอะไร โดยสังเขป:</div><div class="detail-value">' + (row[17]||'-') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">2. เคยยื่นร้องเรียนหน่วยใด:</div><div class="detail-value">' + (row[18]||'-') + '</div></div>' +
+            '<div class="col-md-8"><div class="detail-label">ระบุ (หน่วยใด/ผลอย่างไร):</div><div class="detail-value">' + (row[19]||'-') + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">3. ทราบเรื่องจากที่ใด:</div><div class="detail-value">' + (row[20]||'-') + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">4. เดินทางมาจากจังหวัดใด:</div><div class="detail-value">' + (row[21]||'-') + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">5. สถานที่พักใน กทม:</div><div class="detail-value">' + (row[22]||'-') + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">6. ใช้ยานพาหนะอะไร:</div><div class="detail-value">' + (row[23]||'-') + '</div></div>' +
+          '</div>' +
+        '</div>' +
 
-        <div class="card p-3 border-0 shadow-sm">
-          <div class="detail-section-title text-info" style="border-color: #0dcaf0;"><i class="fas fa-search"></i> 5. ข้อมูลเชิงลึก</div>
-          <div class="row">
-            <div class="col-12"><div class="detail-label">8. ความตั้งใจในวันนี้:</div><div class="detail-value">${row[27] || "-"}</div></div>
-            <div class="col-12"><div class="detail-label">9. ทราบจากที่ใดว่าวันนี้จะมีขบวนเสด็จฯ:</div><div class="detail-value">${row[28] || "-"}</div></div>
-            <div class="col-md-4"><div class="detail-label">10. เคยเดินทางมายื่นถวายฎีกาที่นี่หรือไม่:</div><div class="detail-value">${row[29] || "-"}</div></div>
-            <div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">${row[30] || "-"}</div></div>
-            <div class="col-12"><div class="detail-label">11. ได้ยื่นถวายฎีกาที่อื่น ก่อนเดินทางมา สน. หรือไม่:</div><div class="detail-value">${row[31] || "-"}</div></div>
-            <div class="col-12"><div class="detail-label">12. เคยเดินทางมายื่นถวายฎีกาที่อื่น นอกจากพระบรมมหาราชวัง หรือไม่:</div><div class="detail-value">${row[32] || "-"}</div></div>
-            <div class="col-12"><div class="detail-label">13. กรณีมาติดตามเรื่องเดิม มีหลักฐานความคืบหน้าหรือไม่:</div><div class="detail-value">${row[33] || "-"}</div></div>
-            <div class="col-12"><div class="detail-label">อื่นๆ (หมายเหตุ):</div><div class="detail-value">${row[34] || "-"}</div></div>
-          </div>
-        </div>
-      `;
-      
-      modalBody.innerHTML = html;
-      detailModal.show(); 
+        '<div class="card p-3 mb-3 border-0 shadow-sm">' +
+          '<div class="detail-section-title text-warning" style="border-color:#ffc107"><i class="fas fa-address-book"></i> 4. บุคคลที่สามารถติดต่อได้</div>' +
+          '<div class="row">' +
+            '<div class="col-md-4"><div class="detail-label">7. ชื่อ - สกุล:</div><div class="detail-value">' + (row[24]||'-') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">เกี่ยวข้องเป็น:</div><div class="detail-value">' + (row[25]||'-') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">เบอร์โทร:</div><div class="detail-value">' + phone2 + '</div></div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="card p-3 border-0 shadow-sm">' +
+          '<div class="detail-section-title text-info" style="border-color:#0dcaf0"><i class="fas fa-search"></i> 5. ข้อมูลเชิงลึก</div>' +
+          '<div class="row">' +
+            '<div class="col-12"><div class="detail-label">8. ความตั้งใจในวันนี้:</div><div class="detail-value">' + (row[27]||'-') + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">9. ทราบจากที่ใดว่าวันนี้จะมีขบวนเสด็จฯ:</div><div class="detail-value">' + (row[28]||'-') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">10. เคยเดินทางมายื่นถวายฎีกาที่นี่หรือไม่:</div><div class="detail-value">' + (row[29]||'-') + '</div></div>' +
+            '<div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">' + (row[30]||'-') + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">11. ได้ยื่นถวายฎีกาที่อื่น ก่อนเดินทางมา สน. หรือไม่:</div><div class="detail-value">' + (row[31]||'-') + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">12. เคยเดินทางมายื่นถวายฎีกาที่อื่น นอกจากพระบรมมหาราชวัง หรือไม่:</div><div class="detail-value">' + (row[32]||'-') + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">13. กรณีมาติดตามเรื่องเดิม มีหลักฐานความคืบหน้าหรือไม่:</div><div class="detail-value">' + (row[33]||'-') + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">อื่นๆ (หมายเหตุ):</div><div class="detail-value">' + (row[34]||'-') + '</div></div>' +
+          '</div>' +
+        '</div>';
+
+      detailModal.show();
     }
 
-    function handleFormSubmit(event) {
-      event.preventDefault(); 
-      let btn = document.getElementById('submitBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
+    // ==================== EDIT ====================
+    function openEditFromModal() {
+      detailModal.hide();
+      editRecord(currentViewItem.sheetRow, currentViewItem.data);
+    }
 
+    function editRecord(sheetRow, rowData) {
+      editSheetRow = sheetRow;
+      const fullName = ((rowData[3] || '') + ' ' + (rowData[4] || '')).trim();
+
+      // Update form UI for edit mode
+      document.getElementById('formTitle').innerHTML =
+        '<i class="fas fa-edit text-warning"></i> แก้ไขข้อมูล';
+      document.getElementById('editModeName').textContent = fullName;
+      document.getElementById('editModeBanner').classList.remove('d-none');
+      document.getElementById('submitBtn').innerHTML =
+        '<i class="fas fa-save"></i> บันทึกการแก้ไข';
+      document.getElementById('cancelEditBtn').classList.remove('d-none');
+
+      populateFormForEdit(rowData);
+      showView('formView');
+    }
+
+    function populateFormForEdit(rowData) {
       const form = document.getElementById('dataForm');
-      let formObject = {};
-      
-      new FormData(form).forEach((value, key) => { 
-        if ((key === 'col7' || key === 'col9' || key === 'col27') && value !== '') {
-          formObject[key] = "'" + value; 
+      // colN is stored at index N-1 in rowData (col2 = index 1, ..., col35 = index 34)
+      for (let n = 2; n <= 35; n++) {
+        const el  = form.querySelector('[name="col' + n + '"]');
+        if (!el) continue;
+        let val   = (rowData[n - 1] || '').toString().replace(/^'/, ''); // strip leading apostrophe
+        if (el.tagName === 'SELECT') {
+          el.value = val;
+        } else if (el.type === 'date') {
+          el.value = parseDateForInput(val);
         } else {
-          formObject[key] = value; 
+          el.value = val;
         }
-      });
+      }
+    }
+
+    function parseDateForInput(str) {
+      if (!str) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str; // already ISO
+      const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (m) {
+        let y = parseInt(m[3]);
+        if (y > 2400) y -= 543; // Buddhist Era → Gregorian
+        return y + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+      }
+      return '';
+    }
+
+    function cancelEdit() {
+      resetFormMode();
+      document.getElementById('dataForm').reset();
+      showView('dashboardView');
+    }
+
+    function resetFormMode() {
+      editSheetRow = null;
+      document.getElementById('formTitle').innerHTML =
+        '<i class="fas fa-file-signature text-primary"></i> แบบฟอร์มลงข้อมูลใหม่';
+      document.getElementById('editModeBanner').classList.add('d-none');
+      document.getElementById('submitBtn').innerHTML =
+        '<i class="fas fa-save"></i> บันทึกข้อมูลเข้าฐานข้อมูล';
+      document.getElementById('cancelEditBtn').classList.add('d-none');
+    }
+
+    // ==================== DELETE ====================
+    function openDeleteConfirm() {
+      const row      = currentViewItem.data;
+      const fullName = ((row[3] || '') + ' ' + (row[4] || '')).trim();
+      document.getElementById('deleteConfirmName').textContent = fullName || '(ไม่มีชื่อ)';
+      deleteConfirmModal.show();
+    }
+
+    function executeDelete() {
+      const btn = document.getElementById('confirmDeleteBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังลบ...';
 
       google.script.run
         .withSuccessHandler(function(response) {
-          if(response.success) {
-            alert("✅ บันทึกข้อมูลเสร็จสิ้น");
-            form.reset(); 
-            showView('welcomeView');
-          } else {
-            alert("❌ " + response.message);
-          }
           btn.disabled = false;
-          btn.innerHTML = '<i class="fas fa-save"></i> บันทึกข้อมูลเข้าฐานข้อมูล';
+          btn.innerHTML = '<i class="fas fa-trash-alt"></i> ยืนยันการลบ';
+          deleteConfirmModal.hide();
+          detailModal.hide();
+          if (response.success) {
+            showToast(response.message, 'success');
+            refreshDashboard();
+          } else {
+            showToast(response.message, 'danger');
+          }
         })
-        .submitData(formObject);
+        .withFailureHandler(function(error) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-trash-alt"></i> ยืนยันการลบ';
+          deleteConfirmModal.hide();
+          showToast('เกิดข้อผิดพลาด: ' + error.message, 'danger');
+        })
+        .deleteData(currentViewItem.sheetRow, adminSession);
+    }
+
+    // ==================== FORM SUBMIT (Create & Edit) ====================
+    function handleFormSubmit(event) {
+      event.preventDefault();
+      const btn  = document.getElementById('submitBtn');
+      const form = document.getElementById('dataForm');
+      const isEdit = editSheetRow !== null;
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
+
+      const formObject = {};
+      new FormData(form).forEach((value, key) => {
+        // Prepend apostrophe to phone/ID fields to preserve leading zeros in Sheets
+        if ((key === 'col7' || key === 'col9' || key === 'col27') && value !== '') {
+          formObject[key] = "'" + value;
+        } else {
+          formObject[key] = value;
+        }
+      });
+
+      const resetBtn = () => {
+        btn.disabled = false;
+        btn.innerHTML = isEdit
+          ? '<i class="fas fa-save"></i> บันทึกการแก้ไข'
+          : '<i class="fas fa-save"></i> บันทึกข้อมูลเข้าฐานข้อมูล';
+      };
+
+      const onSuccess = function(response) {
+        resetBtn();
+        if (response.success) {
+          showToast(response.message, 'success');
+          form.reset();
+          if (isEdit) {
+            resetFormMode();
+            refreshDashboard();
+          } else {
+            showView('welcomeView');
+          }
+        } else {
+          showToast(response.message, 'danger');
+        }
+      };
+
+      const onFailure = function(error) {
+        resetBtn();
+        showToast('เกิดข้อผิดพลาด: ' + (error.message || error), 'danger');
+      };
+
+      if (isEdit) {
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(onFailure)
+          .updateData(editSheetRow, formObject, adminSession);
+      } else {
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(onFailure)
+          .submitData(formObject);
+      }
+    }
+
+    // ==================== UTILITIES ====================
+    function fixMissingZero(val, type) {
+      if (!val) return '-';
+      const str = val.toString().replace(/^'/, '').trim();
+      if (type === 'phone'  && /^[1-9]\d{7,8}$/.test(str)) return '0' + str;
+      if (type === 'idcard' && /^[1-9]\d{11}$/.test(str))  return '0' + str;
+      return str || '-';
     }
   </script>
 </body>
