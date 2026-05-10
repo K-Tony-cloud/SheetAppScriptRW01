@@ -116,6 +116,10 @@
     .dash-widget .wg-text { font-size: 0.83rem; color: #495057; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dash-widget .wg-badge { font-size: 0.73rem; font-weight: 700; background: #e9ecef; color: #6c757d; border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
     .dash-widget .wg-empty { font-size: 0.85rem; color: #adb5bd; text-align: center; padding: 16px 0; }
+    .dash-widget .wg-item.wg-clickable { cursor: pointer; border-radius: 8px; margin: 0 -8px; padding-left: 8px; padding-right: 8px; transition: background 0.15s; }
+    .dash-widget .wg-item.wg-clickable:hover { background: #f0f4ff; }
+    .dash-widget .wg-item.wg-clickable.active .wg-text { color: #0d6efd; font-weight: 700; }
+    .dash-widget .wg-item.wg-clickable.active .wg-badge { background: #0d6efd; color: #fff; }
   </style>
 </head>
 <body>
@@ -555,6 +559,7 @@
     let sortCol = -1;
     let sortAsc = true;
     let activeCardFilter = 'all';
+    let activeProvinceFilter = null;
 
     // ==================== INIT ====================
     document.addEventListener("DOMContentLoaded", function() {
@@ -595,6 +600,7 @@
       sortCol = -1;
       sortAsc = true;
       activeCardFilter = 'all';
+      activeProvinceFilter = null;
       showView('welcomeView');
       showToast('ออกจากระบบเรียบร้อยแล้ว', 'secondary');
     }
@@ -682,8 +688,14 @@
 
     function filterByCard(type) {
       activeCardFilter = type;
+      activeProvinceFilter = null;
       document.querySelectorAll('.summary-card').forEach(c => c.classList.remove('active'));
       document.getElementById('card-' + type).classList.add('active');
+      applyFilters();
+    }
+
+    function filterByProvince(province) {
+      activeProvinceFilter = (activeProvinceFilter === province) ? null : province;
       applyFilters();
     }
 
@@ -723,6 +735,12 @@
         return true;
       });
 
+      if (activeProvinceFilter) {
+        filteredData = filteredData.filter(item =>
+          extractProvince((item.data[7] || '').toString().trim()) === activeProvinceFilter
+        );
+      }
+
       // Re-apply existing sort without toggling direction
       if (sortCol > -1) {
         filteredData.sort((a, b) => {
@@ -757,9 +775,24 @@
     }
 
     function updateInfoWidgets(dataArray) {
-      renderWidget('widgetAddress',  computeTopProvinces(dataArray, 5));
+      renderProvinceWidget(computeTopProvinces(dataArray, 5));
       renderWidget('widgetTopic',    computeTopN(dataArray, 35, 5));
       renderWidget('widgetProvince', computeTopN(dataArray, 36, 5));
+    }
+
+    function renderProvinceWidget(entries) {
+      const el = document.getElementById('widgetAddress');
+      if (!entries.length) {
+        el.innerHTML = '<div class="wg-empty">ไม่มีข้อมูล</div>';
+        return;
+      }
+      el.innerHTML = entries.map(([label, count]) => {
+        const isActive = activeProvinceFilter === label;
+        return '<div class="wg-item wg-clickable' + (isActive ? ' active' : '') +
+               '" onclick="filterByProvince(\'' + label.replace(/'/g, "\\'") + '\')">' +
+               '<div class="wg-text">' + label + '</div>' +
+               '<div class="wg-badge">' + count + ' ราย</div></div>';
+      }).join('');
     }
 
     // Sorted longest-first so "นครราชสีมา" matches before "นคร" etc.
