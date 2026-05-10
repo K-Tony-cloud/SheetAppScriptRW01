@@ -757,9 +757,43 @@
     }
 
     function updateInfoWidgets(dataArray) {
-      renderWidget('widgetAddress',  computeTopN(dataArray, 7,  5));
+      renderWidget('widgetAddress',  computeTopProvinces(dataArray, 5));
       renderWidget('widgetTopic',    computeTopN(dataArray, 35, 5));
       renderWidget('widgetProvince', computeTopN(dataArray, 36, 5));
+    }
+
+    // Sorted longest-first so "นครราชสีมา" matches before "นคร" etc.
+    const PROVINCES = [
+      'กรุงเทพมหานคร','พระนครศรีอยุธยา','นครราชสีมา','นครศรีธรรมราช',
+      'นครสวรรค์','นครพนม','นครปฐม','นครนายก','ประจวบคีรีขันธ์',
+      'สมุทรปราการ','สมุทรสงคราม','สมุทรสาคร','หนองบัวลำภู',
+      'อุบลราชธานี','อำนาจเจริญ','อุทัยธานี','อุตรดิตถ์','อุดรธานี',
+      'กาญจนบุรี','กาฬสินธุ์','กำแพงเพชร','กระบี่','ขอนแก่น',
+      'จันทบุรี','ฉะเชิงเทรา','ชลบุรี','ชัยนาท','ชัยภูมิ','ชุมพร',
+      'เชียงราย','เชียงใหม่','ตรัง','ตราด','ตาก','นนทบุรี',
+      'นราธิวาส','น่าน','บึงกาฬ','บุรีรัมย์','ปทุมธานี','ปราจีนบุรี',
+      'ปัตตานี','พะเยา','พังงา','พัทลุง','พิจิตร','พิษณุโลก',
+      'เพชรบุรี','เพชรบูรณ์','แพร่','ภูเก็ต','มหาสารคาม','มุกดาหาร',
+      'แม่ฮ่องสอน','ยโสธร','ยะลา','ร้อยเอ็ด','ระนอง','ระยอง',
+      'ราชบุรี','ลพบุรี','ลำปาง','ลำพูน','เลย','ศรีสะเกษ','สกลนคร',
+      'สงขลา','สตูล','สระแก้ว','สระบุรี','สิงห์บุรี','สุโขทัย',
+      'สุพรรณบุรี','สุราษฎร์ธานี','สุรินทร์','หนองคาย','อ่างทอง'
+    ];
+
+    function extractProvince(address) {
+      for (const p of PROVINCES) {
+        if (address.includes(p)) return p;
+      }
+      return null;
+    }
+
+    function computeTopProvinces(dataArray, topN) {
+      const freq = {};
+      dataArray.forEach(item => {
+        const p = extractProvince((item.data[7] || '').toString().trim());
+        if (p) freq[p] = (freq[p] || 0) + 1;
+      });
+      return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, topN);
     }
 
     function computeTopN(dataArray, colIdx, topN) {
