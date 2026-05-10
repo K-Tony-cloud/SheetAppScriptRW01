@@ -70,6 +70,52 @@
     .delay-3 { animation-delay: 0.6s; }
 
     .edit-mode-banner { border-left: 4px solid #ffc107; background: #fff9e6; }
+
+    /* ===== DASHBOARD REDESIGN ===== */
+    .dash-main-card {
+      background: linear-gradient(135deg, #1a252f 0%, #2d3e50 60%, #1e6fa8 100%);
+      border-radius: 20px; padding: 36px 28px; color: white;
+      min-height: 260px; display: flex; flex-direction: column; justify-content: center;
+      box-shadow: 0 8px 32px rgba(26,37,47,0.25);
+      cursor: pointer; border: 3px solid transparent; transition: all 0.3s ease; width: 100%;
+    }
+    .dash-main-card:hover { transform: translateY(-5px); box-shadow: 0 16px 40px rgba(26,37,47,0.38) !important; }
+    .dash-main-card.active { border-color: rgba(255,255,255,0.42) !important; }
+    .dash-main-card .main-icon { font-size: 2.4rem; opacity: 0.4; margin-bottom: 10px; }
+    .dash-main-card .main-label { font-size: 0.8rem; letter-spacing: 0.07em; opacity: 0.72; text-transform: uppercase; margin-bottom: 6px; }
+    .dash-main-card .main-number { font-size: 4.8rem; font-weight: 800; line-height: 1.05; }
+    .dash-main-card .main-unit { font-size: 1rem; opacity: 0.58; margin-top: 4px; }
+
+    .dash-stat-card {
+      border-radius: 16px; padding: 20px 14px; color: white;
+      min-height: 120px; display: flex; flex-direction: column;
+      justify-content: center; align-items: center; text-align: center;
+      cursor: pointer; border: 3px solid transparent; transition: all 0.3s ease; width: 100%;
+    }
+    .dash-stat-card:hover { transform: translateY(-4px); box-shadow: 0 10px 24px rgba(0,0,0,0.22) !important; }
+    .dash-stat-card.active { border-color: rgba(255,255,255,0.55) !important; transform: scale(1.04); }
+    .dash-stat-card .sc-icon { font-size: 1.25rem; opacity: 0.75; margin-bottom: 5px; }
+    .dash-stat-card .sc-label { font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px; }
+    .dash-stat-card .sc-number { font-size: 2rem; font-weight: 700; }
+
+    .dash-widget {
+      background: white; border-radius: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07); padding: 18px 20px; height: 100%;
+    }
+    .dash-widget .wg-header {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.07em; color: #6c757d;
+      padding-bottom: 10px; border-bottom: 1px solid #f0f0f0; margin-bottom: 10px;
+    }
+    .dash-widget .wg-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 0; border-bottom: 1px solid #f8f9fa; gap: 8px;
+    }
+    .dash-widget .wg-item:last-child { border-bottom: none; }
+    .dash-widget .wg-text { font-size: 0.83rem; color: #495057; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dash-widget .wg-badge { font-size: 0.73rem; font-weight: 700; background: #e9ecef; color: #6c757d; border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
+    .dash-widget .wg-empty { font-size: 0.85rem; color: #adb5bd; text-align: center; padding: 16px 0; }
   </style>
 </head>
 <body>
@@ -114,47 +160,82 @@
 
     <!-- ===== DASHBOARD VIEW ===== -->
     <div id="dashboardView" class="d-none">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3 class="fw-bold"><i class="fas fa-chart-pie text-primary"></i> ข้อมูลสรุป (Admin)</h3>
-      </div>
-      <p class="text-muted"><i class="fas fa-hand-pointer"></i> คลิกที่การ์ดเพื่อกรองดูข้อมูลในตารางด้านล่าง</p>
 
-      <div class="row mb-1">
-        <div class="col-12 mb-3">
-          <div class="card bg-primary text-white text-center p-3 h-100 shadow-sm summary-card active" id="card-all" onclick="filterByCard('all')">
-            <h5 class="opacity-75">ผู้มาติดต่อทั้งหมด</h5>
-            <h1 class="display-5 fw-bold" id="totalCount"><i class="fas fa-spinner fa-spin"></i></h1>
-          </div>
+      <!-- Header -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h4 class="fw-bold mb-0"><i class="fas fa-chart-pie text-primary me-2"></i>ข้อมูลสรุป (Admin)</h4>
+          <small class="text-muted"><i class="fas fa-hand-pointer"></i> คลิกที่การ์ดเพื่อกรองดูข้อมูลในตารางด้านล่าง</small>
         </div>
       </div>
 
-      <div class="row mb-4">
-        <div class="col-6 col-md-3 mb-3">
-          <div class="card text-white text-center p-3 h-100 shadow-sm summary-card" id="card-male" style="background-color: #0dcaf0;" onclick="filterByCard('male')">
-            <h6 class="opacity-75"><i class="fas fa-male"></i> ชาย</h6>
-            <h3 class="fw-bold" id="maleCount">-</h3>
+      <!-- Row 1: Large main card (left) + 4 stat cards 2×2 (right) -->
+      <div class="row g-3 mb-3">
+        <div class="col-lg-4 d-flex">
+          <div class="dash-main-card summary-card active" id="card-all" onclick="filterByCard('all')">
+            <div class="main-icon"><i class="fas fa-users"></i></div>
+            <div class="main-label">ผู้เข้ามาติดต่อทั้งหมด</div>
+            <div class="main-number" id="totalCount"><i class="fas fa-spinner fa-spin fs-3"></i></div>
+            <div class="main-unit">ราย</div>
           </div>
         </div>
-        <div class="col-6 col-md-3 mb-3">
-          <div class="card text-white text-center p-3 h-100 shadow-sm summary-card" id="card-female" style="background-color: #e83e8c;" onclick="filterByCard('female')">
-            <h6 class="opacity-75"><i class="fas fa-female"></i> หญิง</h6>
-            <h3 class="fw-bold" id="femaleCount">-</h3>
-          </div>
-        </div>
-        <div class="col-6 col-md-3 mb-3">
-          <div class="card text-white text-center p-3 h-100 shadow-sm summary-card" id="card-first" style="background-color: #20c997;" onclick="filterByCard('first')">
-            <h6 class="opacity-75"><i class="fas fa-user-plus"></i> มาครั้งแรก</h6>
-            <h3 class="fw-bold" id="firstTimeCount">-</h3>
-          </div>
-        </div>
-        <div class="col-6 col-md-3 mb-3">
-          <div class="card text-white text-center p-3 h-100 shadow-sm summary-card" id="card-return" style="background-color: #fd7e14;" onclick="filterByCard('return')">
-            <h6 class="opacity-75"><i class="fas fa-undo"></i> มาใช้ซ้ำ</h6>
-            <h3 class="fw-bold" id="returnCount">-</h3>
+        <div class="col-lg-8">
+          <div class="row g-3 h-100">
+            <div class="col-6 d-flex">
+              <div class="dash-stat-card summary-card shadow-sm w-100" id="card-male" style="background:#0dcaf0;" onclick="filterByCard('male')">
+                <div class="sc-icon"><i class="fas fa-male"></i></div>
+                <div class="sc-label">ชาย</div>
+                <div class="sc-number" id="maleCount">-</div>
+              </div>
+            </div>
+            <div class="col-6 d-flex">
+              <div class="dash-stat-card summary-card shadow-sm w-100" id="card-female" style="background:#e83e8c;" onclick="filterByCard('female')">
+                <div class="sc-icon"><i class="fas fa-female"></i></div>
+                <div class="sc-label">หญิง</div>
+                <div class="sc-number" id="femaleCount">-</div>
+              </div>
+            </div>
+            <div class="col-6 d-flex">
+              <div class="dash-stat-card summary-card shadow-sm w-100" id="card-first" style="background:#20c997;" onclick="filterByCard('first')">
+                <div class="sc-icon"><i class="fas fa-user-plus"></i></div>
+                <div class="sc-label">มาครั้งแรก</div>
+                <div class="sc-number" id="firstTimeCount">-</div>
+              </div>
+            </div>
+            <div class="col-6 d-flex">
+              <div class="dash-stat-card summary-card shadow-sm w-100" id="card-return" style="background:#fd7e14;" onclick="filterByCard('return')">
+                <div class="sc-icon"><i class="fas fa-undo"></i></div>
+                <div class="sc-label">มาซ้ำ</div>
+                <div class="sc-number" id="returnCount">-</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- Row 2: 3 info widgets -->
+      <div class="row g-3 mb-4">
+        <div class="col-lg-4 d-flex">
+          <div class="dash-widget w-100">
+            <div class="wg-header"><i class="fas fa-map-marker-alt text-danger"></i> ที่อยู่ปัจจุบัน</div>
+            <div id="widgetAddress"><div class="wg-empty"><i class="fas fa-spinner fa-spin"></i></div></div>
+          </div>
+        </div>
+        <div class="col-lg-4 d-flex">
+          <div class="dash-widget w-100">
+            <div class="wg-header"><i class="fas fa-file-alt text-primary"></i> ประเภทเรื่องที่ยื่น</div>
+            <div id="widgetTopic"><div class="wg-empty"><i class="fas fa-spinner fa-spin"></i></div></div>
+          </div>
+        </div>
+        <div class="col-lg-4 d-flex">
+          <div class="dash-widget w-100">
+            <div class="wg-header"><i class="fas fa-route text-success"></i> สาเหตุเรื่องที่ยื่น</div>
+            <div id="widgetProvince"><div class="wg-empty"><i class="fas fa-spinner fa-spin"></i></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table card -->
       <div class="card card-form p-4 shadow-sm">
         <div class="row mb-3 align-items-center">
           <div class="col-lg-4 mb-3 mb-lg-0">
@@ -633,11 +714,40 @@
         if (isReturn === 'เคย') returnee++;
         else firstTime++;
       });
-      document.getElementById('totalCount').textContent     = dataArray.length + ' ราย';
-      document.getElementById('maleCount').textContent      = male      + ' ราย';
-      document.getElementById('femaleCount').textContent    = female    + ' ราย';
-      document.getElementById('firstTimeCount').textContent = firstTime + ' ราย';
-      document.getElementById('returnCount').textContent    = returnee  + ' ราย';
+      document.getElementById('totalCount').textContent     = dataArray.length;
+      document.getElementById('maleCount').textContent      = male;
+      document.getElementById('femaleCount').textContent    = female;
+      document.getElementById('firstTimeCount').textContent = firstTime;
+      document.getElementById('returnCount').textContent    = returnee;
+      updateInfoWidgets(dataArray);
+    }
+
+    function updateInfoWidgets(dataArray) {
+      renderWidget('widgetAddress',  computeTopN(dataArray, 7,  5));
+      renderWidget('widgetTopic',    computeTopN(dataArray, 17, 5));
+      renderWidget('widgetProvince', computeTopN(dataArray, 21, 5));
+    }
+
+    function computeTopN(dataArray, colIdx, topN) {
+      const freq = {};
+      dataArray.forEach(item => {
+        const val = (item.data[colIdx] || '').toString().trim();
+        if (val && val !== '-') freq[val] = (freq[val] || 0) + 1;
+      });
+      return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, topN);
+    }
+
+    function renderWidget(elementId, entries) {
+      const el = document.getElementById(elementId);
+      if (!entries.length) {
+        el.innerHTML = '<div class="wg-empty">ไม่มีข้อมูล</div>';
+        return;
+      }
+      el.innerHTML = entries.map(([label, count]) => {
+        const display = label.length > 38 ? label.substring(0, 36) + '…' : label;
+        return '<div class="wg-item"><div class="wg-text" title="' + label + '">' + display + '</div>' +
+               '<div class="wg-badge">' + count + ' ราย</div></div>';
+      }).join('');
     }
 
     function sortTable(colIndex, type) {
