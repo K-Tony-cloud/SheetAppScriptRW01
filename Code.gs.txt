@@ -41,7 +41,8 @@ function submitData(formObject) {
       formObject.col22 || "", formObject.col23 || "", formObject.col24 || "", formObject.col25 || "",
       formObject.col26 || "", formObject.col27 || "", formObject.col28 || "", formObject.col29 || "",
       formObject.col30 || "", formObject.col31 || "", formObject.col32 || "", formObject.col33 || "",
-      formObject.col34 || "", formObject.col35 || ""
+      formObject.col34 || "", formObject.col35 || "",
+      formObject.col36 || "", formObject.col37 || ""
     ];
     sheet.appendRow(newRow);
     return { success: true, message: "บันทึกข้อมูลสำเร็จ!" };
@@ -67,7 +68,8 @@ function updateData(sheetRowNum, formObject, password) {
       formObject.col22 || "", formObject.col23 || "", formObject.col24 || "", formObject.col25 || "",
       formObject.col26 || "", formObject.col27 || "", formObject.col28 || "", formObject.col29 || "",
       formObject.col30 || "", formObject.col31 || "", formObject.col32 || "", formObject.col33 || "",
-      formObject.col34 || "", formObject.col35 || ""
+      formObject.col34 || "", formObject.col35 || "",
+      formObject.col36 || "", formObject.col37 || ""
     ];
     sheet.getRange(sheetRowNum, 1, 1, updatedRow.length).setValues([updatedRow]);
     return { success: true, message: "แก้ไขข้อมูลสำเร็จ!" };
