@@ -560,6 +560,8 @@
     let sortAsc = true;
     let activeCardFilter = 'all';
     let activeProvinceFilter = null;
+    let activeTopicFilter = null;
+    let activeReasonFilter = null;
 
     // ==================== INIT ====================
     document.addEventListener("DOMContentLoaded", function() {
@@ -601,6 +603,8 @@
       sortAsc = true;
       activeCardFilter = 'all';
       activeProvinceFilter = null;
+      activeTopicFilter = null;
+      activeReasonFilter = null;
       showView('welcomeView');
       showToast('ออกจากระบบเรียบร้อยแล้ว', 'secondary');
     }
@@ -689,6 +693,8 @@
     function filterByCard(type) {
       activeCardFilter = type;
       activeProvinceFilter = null;
+      activeTopicFilter = null;
+      activeReasonFilter = null;
       document.querySelectorAll('.summary-card').forEach(c => c.classList.remove('active'));
       document.getElementById('card-' + type).classList.add('active');
       applyFilters();
@@ -696,6 +702,16 @@
 
     function filterByProvince(province) {
       activeProvinceFilter = (activeProvinceFilter === province) ? null : province;
+      applyFilters();
+    }
+
+    function filterByTopic(topic) {
+      activeTopicFilter = (activeTopicFilter === topic) ? null : topic;
+      applyFilters();
+    }
+
+    function filterByReason(reason) {
+      activeReasonFilter = (activeReasonFilter === reason) ? null : reason;
       applyFilters();
     }
 
@@ -741,6 +757,18 @@
         );
       }
 
+      if (activeTopicFilter) {
+        filteredData = filteredData.filter(item =>
+          (item.data[35] || '').toString().trim() === activeTopicFilter
+        );
+      }
+
+      if (activeReasonFilter) {
+        filteredData = filteredData.filter(item =>
+          (item.data[36] || '').toString().trim() === activeReasonFilter
+        );
+      }
+
       // Re-apply existing sort without toggling direction
       if (sortCol > -1) {
         filteredData.sort((a, b) => {
@@ -776,8 +804,8 @@
 
     function updateInfoWidgets(dataArray) {
       renderProvinceWidget(computeTopProvinces(dataArray, 5));
-      renderWidget('widgetTopic',    computeTopN(dataArray, 35, 5));
-      renderWidget('widgetProvince', computeTopN(dataArray, 36, 5));
+      renderTopicWidget(computeTopN(dataArray, 35, 5));
+      renderReasonWidget(computeTopN(dataArray, 36, 5));
     }
 
     function renderProvinceWidget(entries) {
@@ -791,6 +819,38 @@
         return '<div class="wg-item wg-clickable' + (isActive ? ' active' : '') +
                '" onclick="filterByProvince(\'' + label.replace(/'/g, "\\'") + '\')">' +
                '<div class="wg-text">' + label + '</div>' +
+               '<div class="wg-badge">' + count + ' ราย</div></div>';
+      }).join('');
+    }
+
+    function renderTopicWidget(entries) {
+      const el = document.getElementById('widgetTopic');
+      if (!entries.length) {
+        el.innerHTML = '<div class="wg-empty">ไม่มีข้อมูล</div>';
+        return;
+      }
+      el.innerHTML = entries.map(([label, count]) => {
+        const isActive = activeTopicFilter === label;
+        const display  = label.length > 38 ? label.substring(0, 36) + '…' : label;
+        return '<div class="wg-item wg-clickable' + (isActive ? ' active' : '') +
+               '" onclick="filterByTopic(\'' + label.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')">' +
+               '<div class="wg-text" title="' + label + '">' + display + '</div>' +
+               '<div class="wg-badge">' + count + ' ราย</div></div>';
+      }).join('');
+    }
+
+    function renderReasonWidget(entries) {
+      const el = document.getElementById('widgetProvince');
+      if (!entries.length) {
+        el.innerHTML = '<div class="wg-empty">ไม่มีข้อมูล</div>';
+        return;
+      }
+      el.innerHTML = entries.map(([label, count]) => {
+        const isActive = activeReasonFilter === label;
+        const display  = label.length > 38 ? label.substring(0, 36) + '…' : label;
+        return '<div class="wg-item wg-clickable' + (isActive ? ' active' : '') +
+               '" onclick="filterByReason(\'' + label.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')">' +
+               '<div class="wg-text" title="' + label + '">' + display + '</div>' +
                '<div class="wg-badge">' + count + ' ราย</div></div>';
       }).join('');
     }
