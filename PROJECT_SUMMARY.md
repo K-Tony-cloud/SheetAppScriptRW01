@@ -47,6 +47,10 @@ Purpose:
 
 ## Web App URL
 
+**Short URL (GitHub Pages redirect):**
+https://k-tony-cloud.github.io/SheetAppScriptRW01/
+
+**Direct GAS URL:**
 https://script.google.com/macros/s/AKfycby5E9tAwCJBubnOnSLEzBkfCaGFpc0yLihZkmSZ7RI2vjciTEkz-xieMCe7bzHBDg/exec
 
 ---
