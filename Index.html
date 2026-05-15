@@ -586,6 +586,7 @@
     let activeProvinceFilter = null;
     let activeTopicFilter = null;
     let activeReasonFilter = null;
+    const PROVINCES_STATIC = [{"id":1,"name":"กรุงเทพมหานคร"},{"id":2,"name":"สมุทรปราการ"},{"id":3,"name":"นนทบุรี"},{"id":4,"name":"ปทุมธานี"},{"id":5,"name":"พระนครศรีอยุธยา"},{"id":6,"name":"อ่างทอง"},{"id":7,"name":"ลพบุรี"},{"id":8,"name":"สิงห์บุรี"},{"id":9,"name":"ชัยนาท"},{"id":10,"name":"สระบุรี"},{"id":11,"name":"ชลบุรี"},{"id":12,"name":"ระยอง"},{"id":13,"name":"จันทบุรี"},{"id":14,"name":"ตราด"},{"id":15,"name":"ฉะเชิงเทรา"},{"id":16,"name":"ปราจีนบุรี"},{"id":17,"name":"นครนายก"},{"id":18,"name":"สระแก้ว"},{"id":19,"name":"นครราชสีมา"},{"id":20,"name":"บุรีรัมย์"},{"id":21,"name":"สุรินทร์"},{"id":22,"name":"ศรีสะเกษ"},{"id":23,"name":"อุบลราชธานี"},{"id":24,"name":"ยโสธร"},{"id":25,"name":"ชัยภูมิ"},{"id":26,"name":"อำนาจเจริญ"},{"id":27,"name":"หนองบัวลำภู"},{"id":28,"name":"ขอนแก่น"},{"id":29,"name":"อุดรธานี"},{"id":30,"name":"เลย"},{"id":31,"name":"หนองคาย"},{"id":32,"name":"มหาสารคาม"},{"id":33,"name":"ร้อยเอ็ด"},{"id":34,"name":"กาฬสินธุ์"},{"id":35,"name":"สกลนคร"},{"id":36,"name":"นครพนม"},{"id":37,"name":"มุกดาหาร"},{"id":38,"name":"เชียงใหม่"},{"id":39,"name":"ลำพูน"},{"id":40,"name":"ลำปาง"},{"id":41,"name":"อุตรดิตถ์"},{"id":42,"name":"แพร่"},{"id":43,"name":"น่าน"},{"id":44,"name":"พะเยา"},{"id":45,"name":"เชียงราย"},{"id":46,"name":"แม่ฮ่องสอน"},{"id":47,"name":"นครสวรรค์"},{"id":48,"name":"อุทัยธานี"},{"id":49,"name":"กำแพงเพชร"},{"id":50,"name":"ตาก"},{"id":51,"name":"สุโขทัย"},{"id":52,"name":"พิษณุโลก"},{"id":53,"name":"พิจิตร"},{"id":54,"name":"เพชรบูรณ์"},{"id":55,"name":"ราชบุรี"},{"id":56,"name":"กาญจนบุรี"},{"id":57,"name":"สุพรรณบุรี"},{"id":58,"name":"นครปฐม"},{"id":59,"name":"สมุทรสาคร"},{"id":60,"name":"สมุทรสงคราม"},{"id":61,"name":"เพชรบุรี"},{"id":62,"name":"ประจวบคีรีขันธ์"},{"id":63,"name":"นครศรีธรรมราช"},{"id":64,"name":"กระบี่"},{"id":65,"name":"พังงา"},{"id":66,"name":"ภูเก็ต"},{"id":67,"name":"สุราษฎร์ธานี"},{"id":68,"name":"ระนอง"},{"id":69,"name":"ชุมพร"},{"id":70,"name":"สงขลา"},{"id":71,"name":"สตูล"},{"id":72,"name":"ตรัง"},{"id":73,"name":"พัทลุง"},{"id":74,"name":"ปัตตานี"},{"id":75,"name":"ยะลา"},{"id":76,"name":"นราธิวาส"},{"id":77,"name":"บึงกาฬ"}];
     let provincesData = null;
     let provinceNameToId = {};
     let amphoeNameToId = {};
@@ -1229,20 +1230,12 @@
     // ==================== THAI GEOGRAPHY ====================
     // Data is fetched server-side (UrlFetchApp) to bypass GAS iframe CSP.
     function loadProvinces() {
-      if (provincesData) { populateIncidentProvinceDropdown(); return; }
-      const provEl = document.getElementById('incidentProvince');
-      if (provEl) { provEl.innerHTML = '<option value="">กำลังโหลด...</option>'; provEl.disabled = true; }
-      google.script.run
-        .withSuccessHandler(function(data) {
-          provincesData = data;
-          provinceNameToId = {};
-          data.forEach(function(p) { provinceNameToId[p.name] = p.id; });
-          populateIncidentProvinceDropdown();
-        })
-        .withFailureHandler(function() {
-          if (provEl) { provEl.innerHTML = '<option value="">โหลดข้อมูลไม่สำเร็จ</option>'; provEl.disabled = false; }
-        })
-        .getProvinces();
+      if (!provincesData) {
+        provincesData = PROVINCES_STATIC;
+        provinceNameToId = {};
+        PROVINCES_STATIC.forEach(function(p) { provinceNameToId[p.name] = p.id; });
+      }
+      populateIncidentProvinceDropdown();
     }
 
     function populateIncidentProvinceDropdown() {
@@ -1278,7 +1271,8 @@
           });
           amphEl.disabled = false;
         })
-        .withFailureHandler(function() {
+        .withFailureHandler(function(err) {
+          console.error('getAmphures failed:', err);
           amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
           amphEl.disabled = false;
         })
@@ -1301,7 +1295,8 @@
           });
           tambEl.disabled = false;
         })
-        .withFailureHandler(function() {
+        .withFailureHandler(function(err) {
+          console.error('getTambons failed:', err);
           tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
           tambEl.disabled = false;
         })
@@ -1310,67 +1305,50 @@
 
     function restoreIncidentLocation(province, amphoe, tambon) {
       if (!province && !amphoe && !tambon) return;
-      var doRestore = function() {
-        const provEl = document.getElementById('incidentProvince');
-        if (!provEl) return;
-        provEl.value = province;
-        if (!amphoe) return;
-        const provinceId = provinceNameToId[province];
-        if (!provinceId) return;
-        const amphEl = document.getElementById('incidentAmphoe');
-        amphEl.innerHTML = '<option value="">กำลังโหลด...</option>';
-        google.script.run
-          .withSuccessHandler(function(data) {
-            amphoeNameToId = {};
-            amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
-            data.forEach(function(a) {
-              amphEl.innerHTML += '<option value="' + a.name + '">' + a.name + '</option>';
-              amphoeNameToId[a.name] = a.id;
-            });
-            amphEl.disabled = false;
-            amphEl.value = amphoe;
-            if (!tambon) return;
-            const amphoeId = amphoeNameToId[amphoe];
-            if (!amphoeId) return;
-            const tambEl = document.getElementById('incidentTambon');
-            tambEl.innerHTML = '<option value="">กำลังโหลด...</option>';
-            google.script.run
-              .withSuccessHandler(function(tdata) {
-                tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
-                tdata.forEach(function(t) {
-                  tambEl.innerHTML += '<option value="' + t.name + '">' + t.name + '</option>';
-                });
-                tambEl.disabled = false;
-                tambEl.value = tambon;
-              })
-              .withFailureHandler(function() {
-                tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
-              })
-              .getTambons(amphoeId);
-          })
-          .withFailureHandler(function() {
-            amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
-          })
-          .getAmphures(provinceId);
-      };
-      if (provincesData) {
-        doRestore();
-      } else {
-        const provEl = document.getElementById('incidentProvince');
-        if (provEl) { provEl.innerHTML = '<option value="">กำลังโหลด...</option>'; provEl.disabled = true; }
-        google.script.run
-          .withSuccessHandler(function(data) {
-            provincesData = data;
-            provinceNameToId = {};
-            data.forEach(function(p) { provinceNameToId[p.name] = p.id; });
-            populateIncidentProvinceDropdown();
-            doRestore();
-          })
-          .withFailureHandler(function() {
-            if (provEl) { provEl.innerHTML = '<option value="">โหลดข้อมูลไม่สำเร็จ</option>'; provEl.disabled = false; }
-          })
-          .getProvinces();
-      }
+      loadProvinces();
+      const provEl = document.getElementById('incidentProvince');
+      if (!provEl) return;
+      provEl.value = province;
+      if (!amphoe) return;
+      const provinceId = provinceNameToId[province];
+      if (!provinceId) return;
+      const amphEl = document.getElementById('incidentAmphoe');
+      amphEl.innerHTML = '<option value="">กำลังโหลด...</option>';
+      google.script.run
+        .withSuccessHandler(function(data) {
+          amphoeNameToId = {};
+          amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
+          data.forEach(function(a) {
+            amphEl.innerHTML += '<option value="' + a.name + '">' + a.name + '</option>';
+            amphoeNameToId[a.name] = a.id;
+          });
+          amphEl.disabled = false;
+          amphEl.value = amphoe;
+          if (!tambon) return;
+          const amphoeId = amphoeNameToId[amphoe];
+          if (!amphoeId) return;
+          const tambEl = document.getElementById('incidentTambon');
+          tambEl.innerHTML = '<option value="">กำลังโหลด...</option>';
+          google.script.run
+            .withSuccessHandler(function(tdata) {
+              tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
+              tdata.forEach(function(t) {
+                tambEl.innerHTML += '<option value="' + t.name + '">' + t.name + '</option>';
+              });
+              tambEl.disabled = false;
+              tambEl.value = tambon;
+            })
+            .withFailureHandler(function(err) {
+              console.error('getTambons (restore) failed:', err);
+              tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
+            })
+            .getTambons(amphoeId);
+        })
+        .withFailureHandler(function(err) {
+          console.error('getAmphures (restore) failed:', err);
+          amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
+        })
+        .getAmphures(provinceId);
     }
 
     function resetIncidentLocation() {
