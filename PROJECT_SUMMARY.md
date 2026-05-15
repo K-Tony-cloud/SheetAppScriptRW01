@@ -48,6 +48,9 @@ Purpose:
 ## Web App URL
 
 **Short URL (GitHub Pages redirect):**
+https://rw6-mpb.github.io/project
+
+**Alternate Short URL:**
 https://k-tony-cloud.github.io/SheetAppScriptRW01/
 
 **Direct GAS URL:**
