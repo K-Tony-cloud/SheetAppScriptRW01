@@ -92,3 +92,44 @@ function deleteData(sheetRowNum, password) {
     return { success: false, message: "เกิดข้อผิดพลาด: " + e.toString() };
   }
 }
+
+// ===== THAILAND GEOGRAPHY (CSP-safe: fetched server-side, cached 6 h) =====
+function getProvinces() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('geo_provinces');
+  if (hit) return JSON.parse(hit);
+  var data = JSON.parse(
+    UrlFetchApp.fetch('https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_province.json')
+      .getContentText()
+  ).map(function(p) { return { id: p.id, name: p.name_th }; });
+  try { cache.put('geo_provinces', JSON.stringify(data), 21600); } catch(e) {}
+  return data;
+}
+
+function getAmphures(provinceId) {
+  var cache = CacheService.getScriptCache();
+  var key = 'geo_amp_' + provinceId;
+  var hit = cache.get(key);
+  if (hit) return JSON.parse(hit);
+  var data = JSON.parse(
+    UrlFetchApp.fetch('https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_amphure.json')
+      .getContentText()
+  ).filter(function(a) { return a.province_id === provinceId; })
+   .map(function(a) { return { id: a.id, name: a.name_th }; });
+  try { cache.put(key, JSON.stringify(data), 21600); } catch(e) {}
+  return data;
+}
+
+function getTambons(amphureId) {
+  var cache = CacheService.getScriptCache();
+  var key = 'geo_tam_' + amphureId;
+  var hit = cache.get(key);
+  if (hit) return JSON.parse(hit);
+  var data = JSON.parse(
+    UrlFetchApp.fetch('https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_tambon.json')
+      .getContentText()
+  ).filter(function(t) { return t.amphure_id === amphureId; })
+   .map(function(t) { return { id: t.id, name: t.name_th }; });
+  try { cache.put(key, JSON.stringify(data), 21600); } catch(e) {}
+  return data;
+}
