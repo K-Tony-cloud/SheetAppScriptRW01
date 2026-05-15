@@ -325,7 +325,8 @@
               <div class="col-md-4 mb-3"><label class="form-label">อายุ</label><input type="number" class="form-control" name="col6"></div>
               <div class="col-md-6 mb-3"><label class="form-label">เลขบัตร ปชช.</label><input type="text" class="form-control" name="col7" maxlength="13"></div>
               <div class="col-md-6 mb-3"><label class="form-label">เบอร์โทร</label><input type="text" class="form-control" name="col9"></div>
-              <div class="col-12"><label class="form-label">ที่อยู่ปัจจุบัน</label><textarea class="form-control" name="col8" rows="2"></textarea></div>
+              <div class="col-12 mb-3"><label class="form-label">ที่อยู่ปัจจุบัน</label><textarea class="form-control" name="col8" rows="2"></textarea></div>
+              <div class="col-12"><label class="form-label">ที่อยู่ภูมิลำเนา</label><textarea class="form-control" name="col38" rows="2"></textarea></div>
             </div>
           </div>
         </div>
@@ -365,6 +366,29 @@
           <div class="card-body p-4 bg-white">
             <div class="row">
               <div class="col-12 mb-3"><label class="form-label">1. เป็นเรื่องอะไร โดยสังเขป</label><textarea class="form-control" name="col18" rows="2"></textarea></div>
+              <div class="col-12 mb-3">
+                <label class="form-label fw-bold text-danger">สถานที่เกิดเรื่อง</label>
+                <div class="row g-2 mt-1">
+                  <div class="col-md-4">
+                    <label class="form-label">จังหวัด</label>
+                    <select class="form-select" name="col39" id="incidentProvince" onchange="onIncidentProvinceChange(this)">
+                      <option value="">-- เลือกจังหวัด --</option>
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">อำเภอ/เขต</label>
+                    <select class="form-select" name="col40" id="incidentAmphoe" onchange="onIncidentAmphoeChange(this)" disabled>
+                      <option value="">-- เลือกอำเภอ/เขต --</option>
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">ตำบล/แขวง</label>
+                    <select class="form-select" name="col41" id="incidentTambon" disabled>
+                      <option value="">-- เลือกตำบล/แขวง --</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
               <div class="col-md-6 mb-3">
                 <label class="form-label">2. ประเภทของเรื่องที่ยื่น</label>
                 <select class="form-select" name="col36">
@@ -562,6 +586,8 @@
     let activeProvinceFilter = null;
     let activeTopicFilter = null;
     let activeReasonFilter = null;
+    let thaiGeoData = null;
+    let geoLoadPromise = null;
 
     // ==================== INIT ====================
     document.addEventListener("DOMContentLoaded", function() {
@@ -593,6 +619,7 @@
         btnHome.classList.remove('d-none');
         if (adminSession) btnLogout.classList.remove('d-none');
       }
+      if (viewId === 'formView') loadThaiGeo();
     }
 
     function logout() {
@@ -967,6 +994,7 @@
             '<div class="col-md-6"><div class="detail-label">เลขบัตร ปชช:</div><div class="detail-value">' + idCard + '</div></div>' +
             '<div class="col-md-6"><div class="detail-label">เบอร์โทร:</div><div class="detail-value">' + phone1 + '</div></div>' +
             '<div class="col-12"><div class="detail-label">ที่อยู่ปัจจุบัน:</div><div class="detail-value">' + (row[7]||'-') + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">ที่อยู่ภูมิลำเนา:</div><div class="detail-value">' + (row[37]||'-') + '</div></div>' +
           '</div>' +
         '</div>' +
 
@@ -988,6 +1016,9 @@
           '<div class="detail-section-title text-danger" style="border-color:#dc3545"><i class="fas fa-file-alt"></i> 3. รายละเอียดเรื่องร้องเรียน</div>' +
           '<div class="row">' +
             '<div class="col-12"><div class="detail-label">1. เป็นเรื่องอะไร โดยสังเขป:</div><div class="detail-value">' + (row[17]||'-') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">สถานที่เกิดเรื่อง จังหวัด:</div><div class="detail-value">' + (row[38]||'-') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">อำเภอ/เขต:</div><div class="detail-value">' + (row[39]||'-') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">ตำบล/แขวง:</div><div class="detail-value">' + (row[40]||'-') + '</div></div>' +
             '<div class="col-md-6"><div class="detail-label">2. ประเภทของเรื่องที่ยื่น:</div><div class="detail-value">' + (row[35]||'-') + '</div></div>' +
             '<div class="col-md-6"><div class="detail-label">3. สาเหตุของเรื่องที่ยื่น:</div><div class="detail-value">' + (row[36]||'-') + '</div></div>' +
             '<div class="col-md-4"><div class="detail-label">4. เคยยื่นร้องเรียนหน่วยใด:</div><div class="detail-value">' + (row[18]||'-') + '</div></div>' +
@@ -1050,11 +1081,10 @@
 
     function populateFormForEdit(rowData) {
       const form = document.getElementById('dataForm');
-      // colN is stored at index N-1 in rowData (col2 = index 1, ..., col35 = index 34)
-      for (let n = 2; n <= 37; n++) {
-        const el  = form.querySelector('[name="col' + n + '"]');
+      for (let n = 2; n <= 38; n++) {
+        const el = form.querySelector('[name="col' + n + '"]');
         if (!el) continue;
-        let val   = (rowData[n - 1] || '').toString().replace(/^'/, ''); // strip leading apostrophe
+        let val = (rowData[n - 1] || '').toString().replace(/^'/, '');
         if (el.tagName === 'SELECT') {
           el.value = val;
         } else if (el.type === 'date') {
@@ -1063,6 +1093,10 @@
           el.value = val;
         }
       }
+      const province = (rowData[38] || '').toString().replace(/^'/, '');
+      const amphoe   = (rowData[39] || '').toString().replace(/^'/, '');
+      const tambon   = (rowData[40] || '').toString().replace(/^'/, '');
+      restoreIncidentLocation(province, amphoe, tambon);
     }
 
     function parseDateForInput(str) {
@@ -1080,6 +1114,7 @@
     function cancelEdit() {
       resetFormMode();
       document.getElementById('dataForm').reset();
+      resetIncidentLocation();
       showView('dashboardView');
     }
 
@@ -1160,6 +1195,7 @@
         if (response.success) {
           showToast(response.message, 'success');
           form.reset();
+          resetIncidentLocation();
           if (isEdit) {
             resetFormMode();
             refreshDashboard();
@@ -1187,6 +1223,111 @@
           .withFailureHandler(onFailure)
           .submitData(formObject);
       }
+    }
+
+    // ==================== THAI GEOGRAPHY ====================
+    function loadThaiGeo() {
+      if (thaiGeoData) { populateIncidentProvinceDropdown(); return Promise.resolve(thaiGeoData); }
+      if (geoLoadPromise) return geoLoadPromise;
+      const provEl = document.getElementById('incidentProvince');
+      if (provEl) { provEl.innerHTML = '<option value="">กำลังโหลดข้อมูล...</option>'; provEl.disabled = true; }
+      geoLoadPromise = fetch('https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_province_with_amphure_tambon.json')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          thaiGeoData = data;
+          populateIncidentProvinceDropdown();
+          return data;
+        })
+        .catch(function(e) {
+          console.warn('Thai geo load failed:', e);
+          if (provEl) { provEl.innerHTML = '<option value="">โหลดข้อมูลไม่สำเร็จ</option>'; provEl.disabled = false; }
+          geoLoadPromise = null;
+          return null;
+        });
+      return geoLoadPromise;
+    }
+
+    function populateIncidentProvinceDropdown() {
+      const el = document.getElementById('incidentProvince');
+      if (!el || !thaiGeoData) return;
+      const cur = el.value;
+      el.innerHTML = '<option value="">-- เลือกจังหวัด --</option>';
+      thaiGeoData.forEach(function(p) {
+        el.innerHTML += '<option value="' + p.name_th + '">' + p.name_th + '</option>';
+      });
+      el.disabled = false;
+      if (cur) el.value = cur;
+    }
+
+    function onIncidentProvinceChange(el) {
+      const amphEl = document.getElementById('incidentAmphoe');
+      const tambEl = document.getElementById('incidentTambon');
+      amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
+      tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
+      amphEl.disabled = true;
+      tambEl.disabled = true;
+      if (!el.value || !thaiGeoData) return;
+      const prov = thaiGeoData.find(function(p) { return p.name_th === el.value; });
+      if (!prov) return;
+      prov.amphure.forEach(function(a) {
+        amphEl.innerHTML += '<option value="' + a.name_th + '">' + a.name_th + '</option>';
+      });
+      amphEl.disabled = false;
+    }
+
+    function onIncidentAmphoeChange(el) {
+      const tambEl  = document.getElementById('incidentTambon');
+      const provVal = document.getElementById('incidentProvince').value;
+      tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
+      tambEl.disabled = true;
+      if (!el.value || !thaiGeoData || !provVal) return;
+      const prov = thaiGeoData.find(function(p) { return p.name_th === provVal; });
+      if (!prov) return;
+      const amph = prov.amphure.find(function(a) { return a.name_th === el.value; });
+      if (!amph) return;
+      amph.tambon.forEach(function(t) {
+        tambEl.innerHTML += '<option value="' + t.name_th + '">' + t.name_th + '</option>';
+      });
+      tambEl.disabled = false;
+    }
+
+    function restoreIncidentLocation(province, amphoe, tambon) {
+      if (!province && !amphoe && !tambon) return;
+      loadThaiGeo().then(function(data) {
+        if (!data) return;
+        const provEl = document.getElementById('incidentProvince');
+        if (!provEl) return;
+        provEl.value = province;
+        if (!amphoe) return;
+        const prov = data.find(function(p) { return p.name_th === province; });
+        if (!prov) return;
+        const amphEl = document.getElementById('incidentAmphoe');
+        amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
+        prov.amphure.forEach(function(a) {
+          amphEl.innerHTML += '<option value="' + a.name_th + '">' + a.name_th + '</option>';
+        });
+        amphEl.disabled = false;
+        amphEl.value = amphoe;
+        if (!tambon) return;
+        const amph = prov.amphure.find(function(a) { return a.name_th === amphoe; });
+        if (!amph) return;
+        const tambEl = document.getElementById('incidentTambon');
+        tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
+        amph.tambon.forEach(function(t) {
+          tambEl.innerHTML += '<option value="' + t.name_th + '">' + t.name_th + '</option>';
+        });
+        tambEl.disabled = false;
+        tambEl.value = tambon;
+      });
+    }
+
+    function resetIncidentLocation() {
+      const provEl = document.getElementById('incidentProvince');
+      const amphEl = document.getElementById('incidentAmphoe');
+      const tambEl = document.getElementById('incidentTambon');
+      if (provEl) { provEl.value = ''; }
+      if (amphEl) { amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>'; amphEl.disabled = true; }
+      if (tambEl) { tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>'; tambEl.disabled = true; }
     }
 
     // ==================== UTILITIES ====================
