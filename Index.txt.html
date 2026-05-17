@@ -591,6 +591,17 @@
     let provinceNameToId = {};
     let amphoeNameToId = {};
 
+    // ==================== GAS API ====================
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycby5E9tAwCJBubnOnSLEzBkfCaGFpc0yLihZkmSZ7RI2vjciTEkz-xieMCe7bzHBDg/exec';
+    function gasGet(params) {
+      return fetch(GAS_API_URL + '?' + new URLSearchParams(params).toString())
+        .then(function(r) { return r.json(); });
+    }
+    function gasPost(data) {
+      return fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify(data) })
+        .then(function(r) { return r.json(); });
+    }
+
     // ==================== INIT ====================
     document.addEventListener("DOMContentLoaded", function() {
       loginModal       = new bootstrap.Modal(document.getElementById('loginModal'));
@@ -660,10 +671,15 @@
       spinnerEl.classList.remove('d-none');
       btnEl.disabled = true;
 
-      google.script.run
-        .withSuccessHandler(function(data) {
+      gasGet({ action: 'dashboard', password: pwd })
+        .then(function(data) {
           spinnerEl.classList.add('d-none');
           btnEl.disabled = false;
+          if (data.error) {
+            errorEl.classList.remove('d-none');
+            errorEl.textContent = data.error;
+            return;
+          }
           errorEl.classList.add('d-none');
           loginModal.hide();
           document.getElementById('adminPasswordInput').value = '';
@@ -676,29 +692,26 @@
           applyFilters();
           showView('dashboardView');
         })
-        .withFailureHandler(function(error) {
+        .catch(function() {
           spinnerEl.classList.add('d-none');
           btnEl.disabled = false;
           errorEl.classList.remove('d-none');
-          errorEl.textContent = error.message || 'รหัสผ่านไม่ถูกต้อง!';
-        })
-        .getDashboardData(pwd);
+          errorEl.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
+        });
     }
 
     // ==================== DASHBOARD HELPERS ====================
     function refreshDashboard() {
-      google.script.run
-        .withSuccessHandler(function(data) {
+      gasGet({ action: 'dashboard', password: adminSession })
+        .then(function(data) {
+          if (data.error) { showToast('ไม่สามารถโหลดข้อมูลได้: ' + data.error, 'danger'); return; }
           globalData   = data.allData;
           filteredData = [...globalData];
           populateYearDropdown();
           applyFilters();
           showView('dashboardView');
         })
-        .withFailureHandler(function(error) {
-          showToast('ไม่สามารถโหลดข้อมูลได้: ' + error.message, 'danger');
-        })
-        .getDashboardData(adminSession);
+        .catch(function() { showToast('ไม่สามารถโหลดข้อมูลได้', 'danger'); });
     }
 
     function populateYearDropdown() {
@@ -1143,8 +1156,8 @@
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังลบ...';
 
-      google.script.run
-        .withSuccessHandler(function(response) {
+      gasPost({ action: 'delete', sheetRow: currentViewItem.sheetRow, password: adminSession })
+        .then(function(response) {
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-trash-alt"></i> ยืนยันการลบ';
           deleteConfirmModal.hide();
@@ -1156,13 +1169,12 @@
             showToast(response.message, 'danger');
           }
         })
-        .withFailureHandler(function(error) {
+        .catch(function(error) {
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-trash-alt"></i> ยืนยันการลบ';
           deleteConfirmModal.hide();
-          showToast('เกิดข้อผิดพลาด: ' + error.message, 'danger');
-        })
-        .deleteData(currentViewItem.sheetRow, adminSession);
+          showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'danger');
+        });
     }
 
     // ==================== FORM SUBMIT (Create & Edit) ====================
@@ -1215,15 +1227,11 @@
       };
 
       if (isEdit) {
-        google.script.run
-          .withSuccessHandler(onSuccess)
-          .withFailureHandler(onFailure)
-          .updateData(editSheetRow, formObject, adminSession);
+        gasPost(Object.assign({ action: 'update', sheetRow: editSheetRow, password: adminSession }, formObject))
+          .then(onSuccess).catch(onFailure);
       } else {
-        google.script.run
-          .withSuccessHandler(onSuccess)
-          .withFailureHandler(onFailure)
-          .submitData(formObject);
+        gasPost(Object.assign({ action: 'submit' }, formObject))
+          .then(onSuccess).catch(onFailure);
       }
     }
 
@@ -1261,8 +1269,8 @@
       const provinceId = provinceNameToId[el.value];
       if (!provinceId) return;
       amphEl.innerHTML = '<option value="">กำลังโหลด...</option>';
-      google.script.run
-        .withSuccessHandler(function(data) {
+      gasGet({ action: 'amphures', provinceId: provinceId })
+        .then(function(data) {
           amphoeNameToId = {};
           amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
           data.forEach(function(a) {
@@ -1271,12 +1279,11 @@
           });
           amphEl.disabled = false;
         })
-        .withFailureHandler(function(err) {
+        .catch(function(err) {
           console.error('getAmphures failed:', err);
           amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
           amphEl.disabled = false;
-        })
-        .getAmphures(provinceId);
+        });
     }
 
     function onIncidentAmphoeChange(el) {
@@ -1287,20 +1294,19 @@
       const amphoeId = amphoeNameToId[el.value];
       if (!amphoeId) return;
       tambEl.innerHTML = '<option value="">กำลังโหลด...</option>';
-      google.script.run
-        .withSuccessHandler(function(data) {
+      gasGet({ action: 'tambons', amphureId: amphoeId })
+        .then(function(data) {
           tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
           data.forEach(function(t) {
             tambEl.innerHTML += '<option value="' + t.name + '">' + t.name + '</option>';
           });
           tambEl.disabled = false;
         })
-        .withFailureHandler(function(err) {
+        .catch(function(err) {
           console.error('getTambons failed:', err);
           tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
           tambEl.disabled = false;
-        })
-        .getTambons(amphoeId);
+        });
     }
 
     function restoreIncidentLocation(province, amphoe, tambon) {
@@ -1314,8 +1320,8 @@
       if (!provinceId) return;
       const amphEl = document.getElementById('incidentAmphoe');
       amphEl.innerHTML = '<option value="">กำลังโหลด...</option>';
-      google.script.run
-        .withSuccessHandler(function(data) {
+      gasGet({ action: 'amphures', provinceId: provinceId })
+        .then(function(data) {
           amphoeNameToId = {};
           amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
           data.forEach(function(a) {
@@ -1329,8 +1335,8 @@
           if (!amphoeId) return;
           const tambEl = document.getElementById('incidentTambon');
           tambEl.innerHTML = '<option value="">กำลังโหลด...</option>';
-          google.script.run
-            .withSuccessHandler(function(tdata) {
+          return gasGet({ action: 'tambons', amphureId: amphoeId })
+            .then(function(tdata) {
               tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
               tdata.forEach(function(t) {
                 tambEl.innerHTML += '<option value="' + t.name + '">' + t.name + '</option>';
@@ -1338,17 +1344,15 @@
               tambEl.disabled = false;
               tambEl.value = tambon;
             })
-            .withFailureHandler(function(err) {
+            .catch(function(err) {
               console.error('getTambons (restore) failed:', err);
               tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
-            })
-            .getTambons(amphoeId);
+            });
         })
-        .withFailureHandler(function(err) {
+        .catch(function(err) {
           console.error('getAmphures (restore) failed:', err);
           amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
-        })
-        .getAmphures(provinceId);
+        });
     }
 
     function resetIncidentLocation() {

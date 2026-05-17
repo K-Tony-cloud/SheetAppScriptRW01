@@ -2,23 +2,64 @@ const SPREADSHEET_ID = "1nWuu8US7L0EPMMGsSFzuBEeSlkOL4YPAM7CGPk0T6wA";
 const SHEET_NAME = "Data";
 const ADMIN_PASSWORD = "123456";
 
-function doGet() {
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
-    .setTitle('ระบบข้อมูลผู้มาติดต่อ (สน.พระราชวัง)')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+// ===== HTTP API ENTRY POINTS =====
+
+function doGet(e) {
+  var params = (e && e.parameter) ? e.parameter : {};
+  var action = params.action || '';
+  var result;
+  try {
+    if (action === 'dashboard') {
+      result = getDashboardData(params.password || '');
+    } else if (action === 'amphures') {
+      result = getAmphures(parseInt(params.provinceId));
+    } else if (action === 'tambons') {
+      result = getTambons(parseInt(params.amphureId));
+    } else {
+      result = { error: 'Unknown action' };
+    }
+  } catch(err) {
+    result = { error: err.toString() };
+  }
+  return makeResponse(result);
 }
 
-// Returns all data with actual spreadsheet row numbers for edit/delete targeting
+function doPost(e) {
+  var result;
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var action = data.action || '';
+    if (action === 'submit') {
+      result = submitData(data);
+    } else if (action === 'update') {
+      result = updateData(parseInt(data.sheetRow), data, data.password || '');
+    } else if (action === 'delete') {
+      result = deleteData(parseInt(data.sheetRow), data.password || '');
+    } else {
+      result = { success: false, message: 'Unknown action' };
+    }
+  } catch(err) {
+    result = { success: false, message: err.toString() };
+  }
+  return makeResponse(result);
+}
+
+function makeResponse(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ===== DATA FUNCTIONS =====
+
 function getDashboardData(password) {
   if (password !== ADMIN_PASSWORD) {
-    throw new Error("รหัสผ่านไม่ถูกต้อง! ไม่มีสิทธิ์เข้าถึงข้อมูล");
+    return { error: "รหัสผ่านไม่ถูกต้อง! ไม่มีสิทธิ์เข้าถึงข้อมูล" };
   }
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
   const data = sheet.getDataRange().getDisplayValues();
   if (data.length <= 1) return { total: 0, allData: [] };
 
-  // Attach actual sheet row number (1-indexed; row 1 = header, row 2 = first data row)
   const rows = data.slice(1).map((rowData, i) => ({
     sheetRow: i + 2,
     data: rowData
@@ -93,7 +134,7 @@ function deleteData(sheetRowNum, password) {
   }
 }
 
-// ===== THAILAND GEOGRAPHY (CSP-safe: fetched server-side, cached 6 h) =====
+// ===== THAILAND GEOGRAPHY (cached 6 h) =====
 var GEO_BASE = 'https://raw.githubusercontent.com/kongvut/thai-province-data/master/api/v1/';
 
 function getAmphures(provinceId) {
