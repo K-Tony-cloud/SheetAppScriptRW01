@@ -249,7 +249,7 @@
           <div class="col-lg-4 mb-3 mb-lg-0">
             <div class="input-group shadow-sm">
               <span class="input-group-text bg-white border-end-0 text-primary"><i class="fas fa-search"></i></span>
-              <input type="text" id="searchInput" class="form-control border-start-0 search-input" placeholder="ค้นหา ชื่อ, เลขบัตร ปชช, เบอร์โทร..." oninput="applyFilters()">
+              <input type="text" id="searchInput" class="form-control border-start-0 search-input" placeholder="ค้นหาทุกฟิลด์: ชื่อ, เลขบัตร, เบอร์, จังหวัด, เรื่อง..." oninput="applyFilters()">
             </div>
           </div>
           <div class="col-lg-4 text-lg-end d-flex justify-content-lg-end gap-2 flex-wrap">
@@ -769,16 +769,13 @@
         return matchMonth && matchYear;
       });
 
+      // GLOBAL SEARCH ACROSS ALL FIELDS
       result = result.filter(item => {
         if (!searchText) return true;
-        const fullName = (item.data[3] || '') + ' ' + (item.data[4] || '');
-        const idCard   = fixMissingZero(item.data[6], 'idcard');
-        const phone    = fixMissingZero(item.data[8], 'phone');
-        const topic    = (item.data[17] || '');
-        return fullName.toLowerCase().includes(searchText) ||
-               idCard.includes(searchText) ||
-               phone.includes(searchText) ||
-               topic.toLowerCase().includes(searchText);
+        return item.data.some(cell => {
+          if (cell === null || cell === undefined) return false;
+          return cell.toString().toLowerCase().includes(searchText);
+        });
       });
 
       updateSummaryCards(result);
