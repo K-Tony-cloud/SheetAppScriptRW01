@@ -1,8 +1,12 @@
-const SPREADSHEET_ID        = "1nWuu8US7L0EPMMGsSFzuBEeSlkOL4YPAM7CGPk0T6wA";
-const SHEET_NAME            = "Data";
+const SPREADSHEET_ID         = "1nWuu8US7L0EPMMGsSFzuBEeSlkOL4YPAM7CGPk0T6wA";
+const SHEET_NAME             = "Data";
 const ATTACHMENTS_SHEET_NAME = "Attachments";
 const DRIVE_ROOT_FOLDER_NAME = "RW01 Uploads";
-const ADMIN_PASSWORD        = "123456";
+const ADMIN_PASSWORD_DEFAULT = "123456";   // fallback only; prefer Script Properties
+const SESSION_TTL_SECS       = 3600;       // 1-hour session token
+
+// Phone / ID columns (1-based sheet col index) — force text storage
+const PHONE_COLS_1BASED = [7, 9, 27, 50];
 
 const ALLOWED_MIME_TYPES = [
   'image/jpeg','image/jpg','image/png','image/gif',
@@ -18,16 +22,12 @@ function doGet(e) {
   var action = params.action || '';
   var result;
   try {
-    if (action === 'dashboard') {
-      result = getDashboardData(params.password || '');
-    } else if (action === 'amphures') {
+    if (action === 'amphures') {
       result = getAmphures(parseInt(params.provinceId));
     } else if (action === 'tambons') {
       result = getTambons(parseInt(params.amphureId));
-    } else if (action === 'listAttachments') {
-      result = listAttachments(params.recordId, params.password || '');
     } else {
-      result = { error: 'Unknown action' };
+      result = { error: 'Unknown GET action. Admin endpoints now use POST.' };
     }
   } catch(err) {
     result = { error: err.toString() };
@@ -40,19 +40,40 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     var action = data.action || '';
-    if (action === 'submit') {
-      result = submitData(data);
-    } else if (action === 'update') {
-      result = updateData(parseInt(data.sheetRow), data, data.password || '');
-    } else if (action === 'delete') {
-      result = deleteData(parseInt(data.sheetRow), data.password || '');
-    } else if (action === 'uploadAttachment') {
-      result = uploadAttachment(data);
-    } else if (action === 'deleteAttachment') {
-      result = deleteAttachmentRecord(data.attachmentId, data.password || '');
-    } else {
-      result = { success: false, message: 'Unknown action' };
+    if      (action === 'login')               result = loginAdmin(data.password || '');
+    else if (action === 'logout')              result = logoutAdmin(data.token || '');
+    else if (action === 'dashboard')           result = getDashboardData(data.token || '');
+    else if (action === 'submit')              result = submitData(data);
+    else if (action === 'update')              result = updateData(parseInt(data.sheetRow), data, data.token || '');
+    else if (action === 'delete')              result = deleteData(parseInt(data.sheetRow), data.token || '');
+    else if (action === 'uploadAttachment')    result = uploadAttachment(data);
+    else if (action === 'listAttachments')     result = listAttachments(data.recordId, data.token || '');
+    else if (action === 'getAttachmentData')   result = getAttachmentData(data.attachmentId, data.token || '');
+    else if (action === 'deleteAttachment')    result = deleteAttachmentRecord(data.attachmentId, data.token || '');
+    else if (action === 'cleanupTestRecords')  result = cleanupTestRecords(data.recordIds || [], data.token || '');
+    else if (action === 'checkDuplicate')       result = checkDuplicate(data, data.token || '');
+    else if (action === 'checkDuplicatePublic')  result = checkDuplicatePublic(data);
+    else if (action === 'initMetadataColumns') {
+      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = initMetadataColumns();
     }
+    else if (action === 'initRecordIdCounter') {
+      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = initRecordIdCounter();
+    }
+    else if (action === 'findDuplicateRecordIds') {
+      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = findDuplicateRecordIds();
+    }
+    else if (action === 'listRecentRevisions') {
+      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = listRecentRevisions();
+    }
+    else if (action === 'exportRevisionRows') {
+      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = exportRevisionRows(data.revisionId || '', parseInt(data.minRecordId || '420'));
+    }
+    else result = { success: false, message: 'Unknown action: ' + action };
   } catch(err) {
     result = { success: false, message: err.toString() };
   }
@@ -65,73 +86,245 @@ function makeResponse(data) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ===== CORE DATA FUNCTIONS =====
+// ===== AUTHENTICATION =====
 
-function getDashboardData(password) {
-  if (password !== ADMIN_PASSWORD) {
-    return { error: "รหัสผ่านไม่ถูกต้อง! ไม่มีสิทธิ์เข้าถึงข้อมูล" };
+function getAdminPassword() {
+  try {
+    var p = PropertiesService.getScriptProperties().getProperty('ADMIN_PASSWORD');
+    return p || ADMIN_PASSWORD_DEFAULT;
+  } catch(e) { return ADMIN_PASSWORD_DEFAULT; }
+}
+
+function loginAdmin(password) {
+  if (password !== getAdminPassword()) {
+    return { success: false, message: 'รหัสผ่านไม่ถูกต้อง!' };
   }
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-  const data = sheet.getDataRange().getDisplayValues();
-  if (data.length <= 1) return { total: 0, allData: [] };
+  var token = Utilities.getUuid();
+  CacheService.getScriptCache().put('sess_' + token, '1', SESSION_TTL_SECS);
+  // Return dashboard data with token so the UI gets everything in one call
+  var dash = getDashboardDataInternal();
+  dash.success  = true;
+  dash.token    = token;
+  dash.expiresIn = SESSION_TTL_SECS;
+  return dash;
+}
 
-  const rows = data.slice(1).map(function(rowData, i) {
-    return { sheetRow: i + 2, data: rowData };
+function logoutAdmin(token) {
+  if (token) {
+    try { CacheService.getScriptCache().remove('sess_' + token); } catch(e) {}
+  }
+  return { success: true, message: 'ออกจากระบบแล้ว' };
+}
+
+function validateSession(token) {
+  if (!token) return false;
+  try {
+    return CacheService.getScriptCache().get('sess_' + token) === '1';
+  } catch(e) { return false; }
+}
+
+// ===== DASHBOARD =====
+
+function getDashboardData(token) {
+  if (!validateSession(token)) return { success: false, message: 'Session หมดอายุ กรุณาล็อกอินใหม่' };
+  var dash = getDashboardDataInternal();
+  dash.success = true;
+  return dash;
+}
+
+function getDashboardDataInternal() {
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var raw   = sheet.getDataRange().getDisplayValues();
+  if (raw.length <= 1) return { total: 0, allData: [], attachmentCounts: {} };
+  var rows = raw.slice(1).map(function(rowData, i) {
+    return { sheetRow: i + 2, seqNo: i + 1, data: rowData };
   }).reverse();
-
-  return { total: rows.length, allData: rows };
+  return {
+    total:            rows.length,
+    allData:          rows,
+    attachmentCounts: getBatchAttachmentCounts()
+  };
 }
 
-function submitData(formObject) {
-  try {
-    const sheet   = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-    const lastRow = sheet.getLastRow();
-    const recordId = lastRow; // ID = row count before append (matches existing behavior)
-
-    const newRow = buildDataRow(recordId, formObject);
-    sheet.appendRow(newRow);
-    return { success: true, recordId: recordId, message: "บันทึกข้อมูลสำเร็จ!" };
-  } catch (e) {
-    return { success: false, message: "เกิดข้อผิดพลาด: " + e.toString() };
-  }
+function getBatchAttachmentCounts() {
+  var attSheet = getOrCreateAttachmentsSheet();
+  if (attSheet.getLastRow() <= 1) return {};
+  var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 9).getValues();
+  var counts = {};
+  vals.forEach(function(r) {
+    if (r[8] === 'deleted') return;
+    var recId = String(r[1]);
+    var sec   = r[2];
+    if (!counts[recId]) counts[recId] = { officer_found: 0, person_portrait: 0, items_evidence: 0, total: 0 };
+    if (counts[recId][sec] !== undefined) counts[recId][sec]++;
+    counts[recId].total++;
+  });
+  return counts;
 }
 
-function updateData(sheetRowNum, formObject, password) {
-  if (password !== ADMIN_PASSWORD) {
-    return { success: false, message: "ไม่มีสิทธิ์แก้ไขข้อมูล!" };
-  }
+// ===== RECORD ID ALLOCATION (concurrency-safe) =====
+
+/**
+ * Allocates the next unique RecordID using LockService + PropertiesService.
+ * Prevents race conditions when two users submit simultaneously.
+ * Uses an atomic counter; also guards against pre-existing sheet collisions.
+ */
+function allocateNextRecordId() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(15000); // wait up to 15 seconds for the lock
   try {
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-    const existingId = sheet.getRange(sheetRowNum, 1).getValue();
+    var props = PropertiesService.getScriptProperties();
+    var stored = props.getProperty('NEXT_REC_ID');
+    var nextId;
 
-    // Read existing full row to preserve new fields (col42–col61) when editing via old form
-    const lastCol = Math.max(61, sheet.getLastColumn());
-    const existingVals = sheet.getRange(sheetRowNum, 1, 1, lastCol).getValues()[0];
+    if (!stored) {
+      // Counter not yet initialized — scan sheet for max existing ID
+      var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+      var lastRow = sheet.getLastRow();
+      var maxId = 0;
+      if (lastRow > 1) {
+        var col1 = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        col1.forEach(function(r) {
+          var v = parseInt(r[0]);
+          if (!isNaN(v) && v > maxId) maxId = v;
+        });
+      }
+      nextId = maxId + 1;
+    } else {
+      nextId = parseInt(stored);
+    }
 
-    const updatedRow = buildDataRow(existingId, formObject, existingVals);
-    sheet.getRange(sheetRowNum, 1, 1, updatedRow.length).setValues([updatedRow]);
-    return { success: true, message: "แก้ไขข้อมูลสำเร็จ!" };
-  } catch (e) {
-    return { success: false, message: "เกิดข้อผิดพลาด: " + e.toString() };
+    // Uniqueness guard: skip if this ID already exists (handles legacy gaps/duplicates)
+    var sheet2 = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    var lr2 = sheet2.getLastRow();
+    if (lr2 > 1) {
+      var existingIds = sheet2.getRange(2, 1, lr2 - 1, 1).getValues();
+      var idSet = {};
+      existingIds.forEach(function(r) { idSet[String(r[0])] = true; });
+      while (idSet[String(nextId)]) { nextId++; }
+    }
+
+    // Persist the counter one step ahead
+    props.setProperty('NEXT_REC_ID', String(nextId + 1));
+    return nextId;
+  } finally {
+    lock.releaseLock();
   }
 }
 
 /**
- * Build the data array for col1–col61.
- * existingVals: optional, the current row values read from Sheet (used in update to preserve new cols)
+ * Initialize the PropertiesService counter from the current sheet max ID.
+ * Run once after deployment, or call via initRecordIdCounter API action.
+ */
+function initRecordIdCounter() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    var lastRow = sheet.getLastRow();
+    var maxId = 0;
+    if (lastRow > 1) {
+      var col1 = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      col1.forEach(function(r) {
+        var v = parseInt(r[0]);
+        if (!isNaN(v) && v > maxId) maxId = v;
+      });
+    }
+    var nextId = maxId + 1;
+    PropertiesService.getScriptProperties().setProperty('NEXT_REC_ID', String(nextId));
+    return { success: true, message: 'Counter initialized. maxId=' + maxId + ', NEXT_REC_ID=' + nextId };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ===== CORE DATA FUNCTIONS =====
+
+function submitData(formObject) {
+  try {
+    var sheet    = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    var recordId = allocateNextRecordId(); // concurrency-safe atomic allocation
+    var newRow   = buildDataRow(recordId, formObject, null);
+    sheet.appendRow(newRow);
+    var newRowNum = sheet.getLastRow();
+    rewritePhoneCells(sheet, newRowNum, newRow);
+    return { success: true, recordId: recordId, message: 'บันทึกข้อมูลสำเร็จ!' };
+  } catch(e) {
+    return { success: false, message: 'เกิดข้อผิดพลาด: ' + e.toString() };
+  }
+}
+
+function updateData(sheetRowNum, formObject, token) {
+  if (!validateSession(token)) return { success: false, message: 'ไม่มีสิทธิ์แก้ไขข้อมูล!' };
+  try {
+    var sheet      = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    var existingId = sheet.getRange(sheetRowNum, 1).getValue();
+    var lastCol    = Math.max(63, sheet.getLastColumn());
+    var existingVals = sheet.getRange(sheetRowNum, 1, 1, lastCol).getValues()[0];
+    var updatedRow = buildDataRow(existingId, formObject, existingVals);
+    sheet.getRange(sheetRowNum, 1, 1, updatedRow.length).setValues([updatedRow]);
+    rewritePhoneCells(sheet, sheetRowNum, updatedRow);
+    return { success: true, message: 'แก้ไขข้อมูลสำเร็จ!' };
+  } catch(e) {
+    return { success: false, message: 'เกิดข้อผิดพลาด: ' + e.toString() };
+  }
+}
+
+function deleteData(sheetRowNum, token) {
+  if (!validateSession(token)) return { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูล!' };
+  try {
+    var sheet    = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    var recId    = String(sheet.getRange(sheetRowNum, 1).getValue());
+    // Cascade soft-delete attachments
+    cascadeDeleteAttachments(recId);
+    sheet.deleteRow(sheetRowNum);
+    return { success: true, message: 'ลบข้อมูลสำเร็จ!' };
+  } catch(e) {
+    return { success: false, message: 'เกิดข้อผิดพลาด: ' + e.toString() };
+  }
+}
+
+function cascadeDeleteAttachments(recordId) {
+  var attSheet = getOrCreateAttachmentsSheet();
+  if (attSheet.getLastRow() <= 1) return;
+  var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues();
+  var now  = new Date().toISOString();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][1]) === String(recordId) && vals[i][8] !== 'deleted') {
+      attSheet.getRange(i + 2, 9).setValue('deleted');
+      attSheet.getRange(i + 2, 11).setValue(now);
+      attSheet.getRange(i + 2, 12).setValue(now);
+      try { DriveApp.getFileById(vals[i][3]).setTrashed(true); } catch(e) {}
+    }
+  }
+}
+
+/**
+ * Build the 61-element data row.
+ * existingVals: current row from getValues() — used on update to preserve cols not in formObject.
  */
 function buildDataRow(recordId, f, existingVals) {
-  // Helper: if existingVals provided and formObject key is missing, keep existing; else use formObject value
   function col(key, existingIdx) {
-    if (f[key] !== undefined && f[key] !== null) return f[key];
-    if (existingVals && existingIdx !== undefined) return existingVals[existingIdx] || "";
-    return "";
+    if (f[key] !== undefined && f[key] !== null) {
+      // Strip leading apostrophe if frontend still sends it (backward compat)
+      var v = String(f[key]);
+      return v.replace(/^'/, '');
+    }
+    if (existingVals && existingIdx !== undefined) {
+      var ev = existingVals[existingIdx];
+      if (ev === null || ev === undefined) return '';
+      return String(ev).replace(/^'/, '');
+    }
+    return '';
   }
 
+  var now = Utilities.formatDate(new Date(), 'Asia/Bangkok', "yyyy-MM-dd'T'HH:mm:ss");
+  // Preserve CreatedAt on update; blank for legacy records with no existing value
+  var createdAt = existingVals ? (existingVals[61] || '') : now;
+  var updatedAt = now; // always set to current time on any write
+
   return [
-    // col1 (A) – Record ID
     recordId,
-    // col2–col41 – original fields
     col('col2'),  col('col3'),  col('col4'),  col('col5'),
     col('col6'),  col('col7'),  col('col8'),  col('col9'),
     col('col10'), col('col11'), col('col12'), col('col13'),
@@ -142,154 +335,182 @@ function buildDataRow(recordId, f, existingVals) {
     col('col30'), col('col31'), col('col32'), col('col33'),
     col('col34'), col('col35'), col('col36'), col('col37'),
     col('col38'), col('col39'), col('col40'), col('col41'),
-    // col42–col61 – new encounter/item fields (index 41–60 in 0-based existingVals)
-    col('col42', 41), // notice_status
-    col('col43', 42), // notice_detail
-    col('col44', 43), // found_location_type
-    col('col45', 44), // found_location_detail
-    col('col46', 45), // found_date
-    col('col47', 46), // found_time
-    col('col48', 47), // found_officer_rank
-    col('col49', 48), // found_officer_name
-    col('col50', 49), // found_officer_phone
-    col('col51', 50), // handover_date
-    col('col52', 51), // handover_time
-    col('col53', 52), // item_visibility
-    col('col54', 53), // item_hidden_detail
-    col('col55', 54), // carry_methods (JSON array)
-    col('col56', 55), // container_types (JSON array)
-    col('col57', 56), // envelope_status
-    col('col58', 57), // envelope_size
-    col('col59', 58), // envelope_size_other
-    col('col60', 59), // envelope_color
-    col('col61', 60)  // envelope_color_other
+    col('col42', 41), col('col43', 42), col('col44', 43), col('col45', 44),
+    col('col46', 45), col('col47', 46), col('col48', 47), col('col49', 48),
+    col('col50', 49), col('col51', 50), col('col52', 51), col('col53', 52),
+    col('col54', 53), col('col55', 54), col('col56', 55), col('col57', 56),
+    col('col58', 57), col('col59', 58), col('col60', 59), col('col61', 60),
+    createdAt,  // col62 — set once on create, preserved on update
+    updatedAt   // col63 — updated on every write
   ];
 }
 
-function deleteData(sheetRowNum, password) {
-  if (password !== ADMIN_PASSWORD) {
-    return { success: false, message: "ไม่มีสิทธิ์ลบข้อมูล!" };
-  }
-  try {
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-    sheet.deleteRow(sheetRowNum);
-    return { success: true, message: "ลบข้อมูลสำเร็จ!" };
-  } catch (e) {
-    return { success: false, message: "เกิดข้อผิดพลาด: " + e.toString() };
-  }
+/**
+ * After writing a row, overwrite phone/ID cells with explicit text format.
+ * This prevents Google Sheets from converting "0891234567" → 891234567.
+ */
+function rewritePhoneCells(sheet, rowNum, rowData) {
+  PHONE_COLS_1BASED.forEach(function(c) {
+    if (c <= rowData.length) {
+      var val = String(rowData[c - 1] || '').replace(/^'/, '').trim();
+      sheet.getRange(rowNum, c).setNumberFormat('@').setValue(val);
+    }
+  });
 }
 
 // ===== ATTACHMENT FUNCTIONS =====
 
 function uploadAttachment(data) {
-  // Validate required fields
   if (!data.recordId || !data.section || !data.fileData || !data.fileName || !data.mimeType) {
     return { success: false, message: 'ข้อมูลไม่ครบถ้วน' };
   }
   if (SECTION_TYPES.indexOf(data.section) === -1) {
-    return { success: false, message: 'ประเภทไฟล์ไม่ถูกต้อง: ' + data.section };
+    return { success: false, message: 'section ไม่ถูกต้อง: ' + data.section };
   }
-  const mime = data.mimeType.toLowerCase().split(';')[0].trim();
+  var mime = data.mimeType.toLowerCase().split(';')[0].trim();
   if (ALLOWED_MIME_TYPES.indexOf(mime) === -1) {
     return { success: false, message: 'ไม่รองรับไฟล์ประเภท: ' + mime };
   }
 
-  // Validate RecordID exists in Data sheet
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-  const lastRow = sheet.getLastRow();
+  // Verify RecordID exists
+  var sheet   = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var lastRow = sheet.getLastRow();
   if (lastRow <= 1) return { success: false, message: 'ไม่พบข้อมูล Record' };
-  const col1Vals = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  const recordExists = col1Vals.some(function(r) { return String(r[0]) === String(data.recordId); });
-  if (!recordExists) return { success: false, message: 'ไม่พบ RecordID: ' + data.recordId };
+  var col1Vals = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var recExists = col1Vals.some(function(r) { return String(r[0]) === String(data.recordId); });
+  if (!recExists) return { success: false, message: 'ไม่พบ RecordID: ' + data.recordId };
 
   // Check section count limit
-  const attSheet = getOrCreateAttachmentsSheet();
-  const attVals = attSheet.getLastRow() > 1
-    ? attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues()
-    : [];
+  var attSheet  = getOrCreateAttachmentsSheet();
+  var attLastRow = attSheet.getLastRow();
   var activeCount = 0;
-  attVals.forEach(function(r) {
-    if (String(r[1]) === String(data.recordId) && r[2] === data.section && r[8] === 'active') {
-      activeCount++;
-    }
-  });
-  const maxAllowed = SECTION_MAX[data.section];
+  if (attLastRow > 1) {
+    var attVals = attSheet.getRange(2, 1, attLastRow - 1, 9).getValues();
+    attVals.forEach(function(r) {
+      if (String(r[1]) === String(data.recordId) && r[2] === data.section && r[8] === 'active') activeCount++;
+    });
+  }
+  var maxAllowed = SECTION_MAX[data.section];
   if (activeCount >= maxAllowed) {
     return { success: false, message: 'เกินจำนวนสูงสุด ' + maxAllowed + ' ไฟล์ สำหรับ ' + data.section };
   }
 
-  // Upload to Drive
   try {
-    const folder = getOrCreateSectionFolder(data.recordId, data.section);
-    const safeName = sanitizeFileName(data.fileName);
-    const decoded = Utilities.base64Decode(data.fileData);
-    const blob = Utilities.newBlob(decoded, mime, safeName);
-    const file = folder.createFile(blob);
-    const fileId = file.getId();
+    var folder   = getOrCreateSectionFolder(data.recordId, data.section);
+    var safeName = sanitizeFileName(data.fileName);
+    var decoded  = Utilities.base64Decode(data.fileData);
+    var blob     = Utilities.newBlob(decoded, mime, safeName);
+    var file     = folder.createFile(blob);
+    var fileId   = file.getId();
 
-    const now = new Date().toISOString();
-    const sortOrder = activeCount + 1;
-    const attachmentId = 'ATT-' + data.recordId + '-' + data.section + '-' + Date.now();
+    var now          = new Date().toISOString();
+    var sortOrder    = activeCount + 1;
+    var attachmentId = 'ATT-' + data.recordId + '-' + data.section + '-' + Date.now();
     attSheet.appendRow([
-      attachmentId,
-      data.recordId,
-      data.section,
-      fileId,
-      safeName,
-      mime,
-      data.sizeBytes || 0,
-      sortOrder,
-      'active',
-      now,
-      now,
-      ''
+      attachmentId, data.recordId, data.section, fileId, safeName,
+      mime, data.sizeBytes || 0, sortOrder, 'active', now, now, ''
     ]);
+    touchRecordUpdatedAt(data.recordId);
     return { success: true, attachmentId: attachmentId, driveFileId: fileId, message: 'อัปโหลดสำเร็จ' };
   } catch(e) {
     return { success: false, message: 'อัปโหลดล้มเหลว: ' + e.toString() };
   }
 }
 
-function listAttachments(recordId, password) {
-  if (password !== ADMIN_PASSWORD) return { error: 'ไม่มีสิทธิ์' };
-  if (!recordId) return { error: 'ต้องระบุ recordId' };
-  const attSheet = getOrCreateAttachmentsSheet();
-  if (attSheet.getLastRow() <= 1) return { attachments: [] };
-  const vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues();
-  const result = [];
+function listAttachments(recordId, token) {
+  if (!validateSession(token)) return { success: false, message: 'ไม่มีสิทธิ์' };
+  if (!recordId) return { success: false, message: 'ต้องระบุ recordId' };
+  var attSheet = getOrCreateAttachmentsSheet();
+  if (attSheet.getLastRow() <= 1) return { success: true, attachments: [] };
+  var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues();
+  var result = [];
   vals.forEach(function(r) {
     if (String(r[1]) === String(recordId) && r[8] !== 'deleted') {
       result.push({
-        attachmentId: r[0], recordId: r[1], section: r[2],
-        driveFileId: r[3], fileName: r[4], mimeType: r[5],
-        sizeBytes: r[6], sortOrder: r[7], status: r[8],
-        uploadedAt: r[9]
+        attachmentId: r[0], recordId: r[1], section: r[2], driveFileId: r[3],
+        fileName: r[4], mimeType: r[5], sizeBytes: r[6], sortOrder: r[7],
+        status: r[8], uploadedAt: r[9]
       });
     }
   });
-  return { attachments: result };
+  result.sort(function(a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); });
+  return { success: true, attachments: result };
 }
 
-function deleteAttachmentRecord(attachmentId, password) {
-  if (password !== ADMIN_PASSWORD) return { success: false, message: 'ไม่มีสิทธิ์' };
+function getAttachmentData(attachmentId, token) {
+  if (!validateSession(token)) return { success: false, message: 'ไม่มีสิทธิ์' };
   if (!attachmentId) return { success: false, message: 'ต้องระบุ attachmentId' };
-  const attSheet = getOrCreateAttachmentsSheet();
+  var attSheet = getOrCreateAttachmentsSheet();
+  if (attSheet.getLastRow() <= 1) return { success: false, message: 'ไม่พบไฟล์' };
+  var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues();
+  var att  = null;
+  for (var i = 0; i < vals.length; i++) {
+    if (vals[i][0] === attachmentId && vals[i][8] !== 'deleted') { att = vals[i]; break; }
+  }
+  if (!att) return { success: false, message: 'ไม่พบ attachment: ' + attachmentId };
+  try {
+    var file     = DriveApp.getFileById(att[3]);
+    var bytes    = file.getBlob().getBytes();
+    var base64   = Utilities.base64Encode(bytes);
+    return { success: true, base64: base64, mimeType: att[5], fileName: att[4] };
+  } catch(e) {
+    return { success: false, message: 'ไม่สามารถโหลดไฟล์ได้: ' + e.toString() };
+  }
+}
+
+function deleteAttachmentRecord(attachmentId, token) {
+  if (!validateSession(token)) return { success: false, message: 'ไม่มีสิทธิ์' };
+  if (!attachmentId) return { success: false, message: 'ต้องระบุ attachmentId' };
+  var attSheet = getOrCreateAttachmentsSheet();
   if (attSheet.getLastRow() <= 1) return { success: false, message: 'ไม่พบข้อมูล' };
-  const vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues();
+  var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues();
   for (var i = 0; i < vals.length; i++) {
     if (vals[i][0] === attachmentId) {
-      const sheetRow = i + 2;
-      const fileId = vals[i][3];
-      // Soft delete: update status + DeletedAt
-      attSheet.getRange(sheetRow, 9).setValue('deleted');
-      attSheet.getRange(sheetRow, 11).setValue(new Date().toISOString());
-      attSheet.getRange(sheetRow, 12).setValue(new Date().toISOString());
-      // Move file to trash in Drive (reversible)
+      var rowNum  = i + 2;
+      var fileId  = vals[i][3];
+      var now     = new Date().toISOString();
+      attSheet.getRange(rowNum, 9).setValue('deleted');
+      attSheet.getRange(rowNum, 11).setValue(now);
+      attSheet.getRange(rowNum, 12).setValue(now);
       try { DriveApp.getFileById(fileId).setTrashed(true); } catch(e) {}
+      touchRecordUpdatedAt(vals[i][1]); // vals[i][1] = RecordID
       return { success: true, message: 'ลบไฟล์สำเร็จ (soft delete)' };
     }
   }
   return { success: false, message: 'ไม่พบ attachmentId: ' + attachmentId };
+}
+
+// ===== TEST RECORD CLEANUP (cascade) =====
+
+function cleanupTestRecords(recordIds, token) {
+  if (!validateSession(token)) return { success: false, message: 'ไม่มีสิทธิ์' };
+  if (!recordIds || !recordIds.length) return { success: false, message: 'ต้องระบุ recordIds' };
+
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var idList = recordIds.map(String);
+
+  // Find target rows + verify they exist
+  var raw    = sheet.getDataRange().getValues();
+  var toDelete = [];
+  for (var i = 1; i < raw.length; i++) {
+    var recId = String(raw[i][0]);
+    if (idList.indexOf(recId) === -1) continue;
+    toDelete.push({ sheetRow: i + 1, recordId: recId, col4: String(raw[i][3] || ''), col5: String(raw[i][4] || '') });
+  }
+
+  if (!toDelete.length) return { success: true, deleted: [], message: 'ไม่พบ record ที่ระบุ' };
+
+  // Sort descending by sheetRow (delete from bottom to avoid shifting)
+  toDelete.sort(function(a, b) { return b.sheetRow - a.sheetRow; });
+
+  var results = [];
+  toDelete.forEach(function(item) {
+    cascadeDeleteAttachments(item.recordId);
+    sheet.deleteRow(item.sheetRow);
+    results.push({ recordId: item.recordId, name: (item.col4 + ' ' + item.col5).trim(), deleted: true });
+  });
+
+  return { success: true, deleted: results, message: 'ลบ ' + results.length + ' record แล้ว' };
 }
 
 // ===== DRIVE HELPERS =====
@@ -301,19 +522,16 @@ function getOrCreateRootFolder() {
 }
 
 function getOrCreateSectionFolder(recordId, sectionType) {
-  var root = getOrCreateRootFolder();
-  var recordName = String(recordId);
-  var recordFolder;
-  var rf = root.getFoldersByName(recordName);
-  if (rf.hasNext()) { recordFolder = rf.next(); }
-  else { recordFolder = root.createFolder(recordName); }
-  var sf = recordFolder.getFoldersByName(sectionType);
-  if (sf.hasNext()) return sf.next();
-  return recordFolder.createFolder(sectionType);
+  var root         = getOrCreateRootFolder();
+  var recordName   = String(recordId);
+  var rf           = root.getFoldersByName(recordName);
+  var recordFolder = rf.hasNext() ? rf.next() : root.createFolder(recordName);
+  var sf           = recordFolder.getFoldersByName(sectionType);
+  return sf.hasNext() ? sf.next() : recordFolder.createFolder(sectionType);
 }
 
 function getOrCreateAttachmentsSheet() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sheet = ss.getSheetByName(ATTACHMENTS_SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(ATTACHMENTS_SHEET_NAME);
@@ -331,66 +549,400 @@ function sanitizeFileName(name) {
   return (name || 'file').replace(/[^\w.\-ก-๙]/g, '_').substring(0, 100);
 }
 
-// ===== INITIALIZE SHEET HEADERS (run once manually) =====
-// Call this from Apps Script editor once after deploying to add new column headers.
-function initNewColumnHeaders() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-  const lastCol = sheet.getLastColumn();
-  if (lastCol < 42) {
-    // Add headers if not present (sheet must already have row 1 as header)
-    const newHeaders = [
-      'notice_status','notice_detail',
-      'found_location_type','found_location_detail',
-      'found_date','found_time',
-      'found_officer_rank','found_officer_name','found_officer_phone',
-      'handover_date','handover_time',
-      'item_visibility','item_hidden_detail',
-      'carry_methods','container_types',
-      'envelope_status','envelope_size','envelope_size_other',
-      'envelope_color','envelope_color_other'
-    ];
-    sheet.getRange(1, 42, 1, newHeaders.length).setValues([newHeaders]);
-    SpreadsheetApp.flush();
-    return { success: true, message: 'Added ' + newHeaders.length + ' new column headers (col42–col61)' };
-  }
-  return { success: true, message: 'Headers already present (lastCol=' + lastCol + ')' };
+// ===== PHONE / TEXT MIGRATION (run once from editor) =====
+
+/**
+ * Sets phone/ID columns to Plain Text format and strips stray leading apostrophes.
+ * Run once from the Apps Script editor after deploying.
+ */
+function setPhoneColumnsAsText() {
+  var sheet   = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { success: true, message: 'No data rows to migrate' };
+  var fixed = 0;
+  PHONE_COLS_1BASED.forEach(function(colIdx) {
+    var range = sheet.getRange(2, colIdx, lastRow - 1, 1);
+    range.setNumberFormat('@');
+    var vals = range.getValues();
+    var newVals = vals.map(function(row) {
+      return [String(row[0] || '').replace(/^'/, '').trim()];
+    });
+    range.setValues(newVals);
+    fixed++;
+  });
+  SpreadsheetApp.flush();
+  return { success: true, message: 'Formatted ' + fixed + ' phone/ID columns as text. Rows: ' + (lastRow - 1) };
 }
 
-// ===== THAILAND GEOGRAPHY (cached 6 h) =====
+// ===== ONE-TIME SETUP HELPERS (run manually from editor) =====
+
+function initNewColumnHeaders() {
+  var sheet   = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var lastCol = sheet.getLastColumn();
+  if (lastCol >= 61) return { success: true, message: 'Headers already present (lastCol=' + lastCol + ')' };
+  var newHeaders = [
+    'notice_status','notice_detail','found_location_type','found_location_detail',
+    'found_date','found_time','found_officer_rank','found_officer_name','found_officer_phone',
+    'handover_date','handover_time','item_visibility','item_hidden_detail',
+    'carry_methods','container_types','envelope_status','envelope_size',
+    'envelope_size_other','envelope_color','envelope_color_other'
+  ];
+  sheet.getRange(1, 42, 1, newHeaders.length).setValues([newHeaders]);
+  SpreadsheetApp.flush();
+  return { success: true, message: 'Added ' + newHeaders.length + ' new column headers (col42–col61)' };
+}
+
+// ===== METADATA HELPERS =====
+
+/**
+ * Sets UpdatedAt (col63) on the main Data sheet row for the given recordId.
+ * Called after attachment create/delete so the record timestamp reflects the change.
+ */
+function touchRecordUpdatedAt(recordId) {
+  try {
+    var sheet   = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return;
+    var col1Vals = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < col1Vals.length; i++) {
+      if (String(col1Vals[i][0]) === String(recordId)) {
+        var now = Utilities.formatDate(new Date(), 'Asia/Bangkok', "yyyy-MM-dd'T'HH:mm:ss");
+        sheet.getRange(i + 2, 63).setValue(now);
+        return;
+      }
+    }
+  } catch(e) {}
+}
+
+/**
+ * Add CreatedAt/UpdatedAt headers to the Data sheet (run once from editor).
+ */
+function initMetadataColumns() {
+  var sheet   = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var lastCol = sheet.getLastColumn();
+  if (lastCol >= 63) return { success: true, message: 'Metadata columns already present (lastCol=' + lastCol + ')' };
+  sheet.getRange(1, 62, 1, 2).setValues([['CreatedAt', 'UpdatedAt']]);
+  SpreadsheetApp.flush();
+  return { success: true, message: 'Added CreatedAt (col62) and UpdatedAt (col63)' };
+}
+
+// ===== DUPLICATE CHECK =====
+
+/**
+ * Search existing records for potential duplicates.
+ * Requires valid admin session token.
+ * Returns only minimal candidate info — no full record data.
+ */
+function checkDuplicate(data, token) {
+  if (!validateSession(token)) return { success: false, message: 'ไม่มีสิทธิ์' };
+
+  var idCard    = (data.idCard    || '').toString().trim();
+  var phone     = normPhoneForDup(data.phone  || '');
+  var name      = normNameForDup(data.name    || '');
+  var excludeId = (data.excludeRecordId || '').toString().trim();
+
+  if (!idCard && phone.length < 8 && name.length < 2) {
+    return { success: true, candidates: [] };
+  }
+
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var raw   = sheet.getDataRange().getDisplayValues();
+  if (raw.length <= 1) return { success: true, candidates: [] };
+
+  var candidates = [];
+  for (var i = 1; i < raw.length; i++) {
+    var row    = raw[i];
+    var recId  = String(row[0]);
+    if (excludeId && recId === excludeId) continue;
+
+    var rowIdCard = (row[6] || '').toString().trim();
+    var rowPhone  = normPhoneForDup((row[8] || '').toString());
+    var rowName   = normNameForDup((row[3] || '') + ' ' + (row[4] || ''));
+
+    var reasons = [];
+    if (idCard.length >= 10 && rowIdCard && idCard === rowIdCard)    reasons.push('เลขบัตรประชาชน');
+    if (phone.length >= 8  && rowPhone  && phone  === rowPhone)      reasons.push('เบอร์โทร');
+    if (!reasons.length && name.length >= 3 && rowName && name === rowName) reasons.push('ชื่อ-สกุล');
+
+    if (reasons.length) {
+      candidates.push({
+        recordId:    recId,
+        name:        ((row[3] || '') + ' ' + (row[4] || '')).trim(),
+        date:        (row[1] || '').toString(),
+        matchReason: reasons
+      });
+      if (candidates.length >= 5) break; // cap at 5
+    }
+  }
+  return { success: true, candidates: candidates };
+}
+
+function normPhoneForDup(str) {
+  if (!str) return '';
+  return str.toString().replace(/^'/, '').replace(/\D/g, '');
+}
+
+function normNameForDup(str) {
+  if (!str) return '';
+  return str.toString().trim().replace(/\s+/g, ' ');
+}
+
+function maskName(name) {
+  if (!name) return '***';
+  return name.split(' ').map(function(p) {
+    return p.length <= 2 ? p + '***' : p.slice(0, 2) + '***';
+  }).join(' ');
+}
+
+/**
+ * Lightweight rate guard for the public duplicate endpoint.
+ * Two-layer: global calls/min ceiling + per-query key cap.
+ * Uses CacheService sliding window (acceptable for abuse deterrence).
+ * Returns false if limit exceeded.
+ */
+function publicDupRateOk(idCard, phone, name) {
+  var cache = CacheService.getScriptCache();
+
+  // Global: max 60 calls per 60-second window across all users
+  var g = parseInt(cache.get('pdup_g') || '0');
+  if (g >= 60) return false;
+  cache.put('pdup_g', String(g + 1), 60);
+
+  // Per-input: max 6 lookups for the same query in 60 seconds
+  var raw     = (idCard + '|' + phone + '|' + name).slice(0, 64);
+  var digest  = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, raw);
+  var hexKey  = digest.slice(0, 8).map(function(b) {
+    return ('0' + (b & 0xff).toString(16)).slice(-2);
+  }).join('');
+  var pk = 'pdup_k' + hexKey;
+  var kc = parseInt(cache.get(pk) || '0');
+  if (kc >= 6) return false;
+  cache.put(pk, String(kc + 1), 60);
+
+  return true;
+}
+
+/**
+ * Public duplicate check — no admin token required.
+ * Returns masked name + date only; caps at 3 candidates.
+ */
+function checkDuplicatePublic(data) {
+  var idCard    = (data.idCard    || '').toString().trim();
+  var phone     = normPhoneForDup(data.phone  || '');
+  var name      = normNameForDup(data.name    || '');
+  var excludeId = (data.excludeRecordId || '').toString().trim();
+
+  if (!idCard && phone.length < 8 && name.length < 2) {
+    return { success: true, candidates: [] };
+  }
+
+  if (!publicDupRateOk(idCard, phone, name)) {
+    return { success: false, rateLimited: true, message: 'ลองใหม่อีกครั้งในอีกสักครู่' };
+  }
+
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var raw   = sheet.getDataRange().getDisplayValues();
+  if (raw.length <= 1) return { success: true, candidates: [] };
+
+  var candidates = [];
+  for (var i = 1; i < raw.length; i++) {
+    var row    = raw[i];
+    var recId  = String(row[0]);
+    if (excludeId && recId === excludeId) continue;
+
+    var rowIdCard = (row[6] || '').toString().trim();
+    var rowPhone  = normPhoneForDup((row[8] || '').toString());
+    var rowName   = normNameForDup((row[3] || '') + ' ' + (row[4] || ''));
+
+    var reasons = [];
+    if (idCard.length >= 10 && rowIdCard && idCard === rowIdCard)          reasons.push('เลขบัตรประชาชน');
+    if (phone.length >= 8  && rowPhone  && phone  === rowPhone)            reasons.push('เบอร์โทร');
+    if (!reasons.length && name.length >= 3 && rowName && name === rowName) reasons.push('ชื่อ-สกุล');
+
+    if (reasons.length) {
+      var fullName = ((row[3] || '') + ' ' + (row[4] || '')).trim();
+      candidates.push({
+        recordId:    recId,
+        maskedName:  maskName(fullName),
+        date:        (row[1] || '').toString(),
+        matchReason: reasons
+      });
+      if (candidates.length >= 3) break;
+    }
+  }
+  return { success: true, candidates: candidates };
+}
+
+// ===== DIAGNOSTIC: DUPLICATE RECORD ID SCAN =====
+
+/**
+ * Scans entire Data sheet for rows sharing the same RecordID.
+ * Returns duplicates with sheetRow info for manual investigation.
+ */
+function findDuplicateRecordIds() {
+  var sheet   = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { success: true, duplicates: [], total: 0 };
+
+  var col1 = sheet.getRange(2, 1, lastRow - 1, 3).getValues(); // id, date, prefix
+  var seen = {};
+  var duplicates = [];
+
+  col1.forEach(function(r, i) {
+    var id = String(r[0]);
+    if (!id || id === '') return;
+    if (seen[id] !== undefined) {
+      // Find or update existing dupe entry
+      var existing = duplicates.find(function(d) { return d.recordId === id; });
+      if (existing) {
+        existing.sheetRows.push(i + 2);
+      } else {
+        duplicates.push({ recordId: id, sheetRows: [seen[id], i + 2] });
+      }
+    } else {
+      seen[id] = i + 2;
+    }
+  });
+
+  return { success: true, duplicates: duplicates, total: lastRow - 1, activeDuplicates: duplicates.length };
+}
+
+// ===== RECOVERY: GOOGLE SHEETS REVISION HISTORY =====
+
+/**
+ * Lists recent revisions of the Data spreadsheet using the Drive REST API.
+ * Used to identify which revision to export for missing record recovery.
+ */
+function listRecentRevisions() {
+  try {
+    var oauthToken = ScriptApp.getOAuthToken();
+    var baseUrl = 'https://www.googleapis.com/drive/v3/files/' + SPREADSHEET_ID +
+                  '/revisions?pageSize=1000&fields=revisions(id,modifiedTime,lastModifyingUser),nextPageToken';
+    var allRevs = [];
+    var pageToken = null;
+
+    // Paginate through ALL revisions to reach the most recent ones
+    do {
+      var url = baseUrl + (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
+      var resp   = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + oauthToken }, muteHttpExceptions: true });
+      var parsed = JSON.parse(resp.getContentText());
+      if (parsed.error) return { success: false, message: JSON.stringify(parsed.error) };
+      if (parsed.revisions) allRevs = allRevs.concat(parsed.revisions);
+      pageToken = parsed.nextPageToken || null;
+    } while (pageToken);
+
+    // Return newest 30
+    var recent = allRevs.slice(-30).reverse();
+    return {
+      success: true,
+      totalRevisions: allRevs.length,
+      revisions: recent.map(function(r) {
+        return {
+          id:           r.id,
+          modifiedTime: r.modifiedTime,
+          modifiedBy:   r.lastModifyingUser ? r.lastModifyingUser.displayName : 'unknown'
+        };
+      })
+    };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+/**
+ * Exports a specific revision of the Data sheet as CSV.
+ * Uses the Sheets HTML export URL with ?rev= parameter (not the Drive API).
+ * Returns rows where RecordID >= minRecordId — for incident recovery.
+ */
+function exportRevisionRows(revisionId, minRecordId) {
+  if (!revisionId) return { success: false, message: 'revisionId required' };
+  try {
+    var oauthToken = ScriptApp.getOAuthToken();
+
+    // Step 1: Get the Data sheet's GID via built-in SpreadsheetApp (no external API needed)
+    var dataSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    if (!dataSheet) return { success: false, message: 'Data sheet not found in spreadsheet' };
+    var dataGid = dataSheet.getSheetId();
+
+    // Step 2: Export this specific revision as CSV via the Sheets export URL
+    var exportUrl = 'https://docs.google.com/spreadsheets/d/' + SPREADSHEET_ID +
+                    '/export?format=csv&gid=' + dataGid + '&rev=' + encodeURIComponent(revisionId);
+    var resp = UrlFetchApp.fetch(exportUrl, {
+      headers: { Authorization: 'Bearer ' + oauthToken },
+      followRedirects: true,
+      muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() !== 200) {
+      return {
+        success: false,
+        message: 'Export HTTP ' + resp.getResponseCode(),
+        dataGid: dataGid,
+        hint: resp.getContentText().slice(0, 200)
+      };
+    }
+
+    var csv  = resp.getContentText();
+    var rows = Utilities.parseCsv(csv);
+    if (!rows || rows.length <= 1) return { success: true, totalInRevision: 0, filtered: [], dataGid: dataGid };
+
+    var filtered = [];
+    for (var i = 1; i < rows.length; i++) {
+      var id = parseInt(rows[i][0]);
+      if (!isNaN(id) && id >= minRecordId) {
+        filtered.push({ rowNum: i + 1, row: rows[i].slice(0, 15) }); // first 15 cols for recovery
+      }
+    }
+    return {
+      success:        true,
+      totalInRevision: rows.length - 1,
+      dataGid:        dataGid,
+      filtered:       filtered
+    };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+function authorizeDriveScope() {
+  ScriptApp.requireScopes(ScriptApp.AuthMode.FULL, ['https://www.googleapis.com/auth/drive']);
+  var root = DriveApp.getRootFolder();
+  var msg  = 'Drive authorized ✅ Root: ' + root.getName() + ' (' + root.getId() + ')';
+  Logger.log(msg);
+  return msg;
+}
+
+// ===== THAILAND GEOGRAPHY (public GET, cached 6h) =====
+
 var GEO_BASE = 'https://raw.githubusercontent.com/kongvut/thai-province-data/master/api/v1/';
 
 function getAmphures(provinceId) {
   try {
     var cache = CacheService.getScriptCache();
-    var key = 'geo_amp_' + provinceId;
-    var hit = cache.get(key);
+    var key   = 'geo_amp_' + provinceId;
+    var hit   = cache.get(key);
     if (hit) return JSON.parse(hit);
-    var resp = UrlFetchApp.fetch(GEO_BASE + 'amphure.json', {muteHttpExceptions: true});
+    var resp  = UrlFetchApp.fetch(GEO_BASE + 'amphure.json', { muteHttpExceptions: true });
     if (resp.getResponseCode() !== 200) throw new Error('HTTP ' + resp.getResponseCode());
-    var data = JSON.parse(resp.getContentText())
+    var data  = JSON.parse(resp.getContentText())
       .filter(function(a) { return a.province_id === provinceId; })
       .map(function(a) { return { id: a.id, name: a.name_th }; });
     try { cache.put(key, JSON.stringify(data), 21600); } catch(e) {}
     return data;
-  } catch(e) {
-    throw new Error('getAmphures failed: ' + e.message);
-  }
+  } catch(e) { throw new Error('getAmphures failed: ' + e.message); }
 }
 
 function getTambons(amphureId) {
   try {
     var cache = CacheService.getScriptCache();
-    var key = 'geo_tam_' + amphureId;
-    var hit = cache.get(key);
+    var key   = 'geo_tam_' + amphureId;
+    var hit   = cache.get(key);
     if (hit) return JSON.parse(hit);
-    var resp = UrlFetchApp.fetch(GEO_BASE + 'tambon.json', {muteHttpExceptions: true});
+    var resp  = UrlFetchApp.fetch(GEO_BASE + 'tambon.json', { muteHttpExceptions: true });
     if (resp.getResponseCode() !== 200) throw new Error('HTTP ' + resp.getResponseCode());
-    var data = JSON.parse(resp.getContentText())
+    var data  = JSON.parse(resp.getContentText())
       .filter(function(t) { return t.amphure_id === amphureId; })
       .map(function(t) { return { id: t.id, name: t.name_th }; });
     try { cache.put(key, JSON.stringify(data), 21600); } catch(e) {}
     return data;
-  } catch(e) {
-    throw new Error('getTambons failed: ' + e.message);
-  }
+  } catch(e) { throw new Error('getTambons failed: ' + e.message); }
 }
