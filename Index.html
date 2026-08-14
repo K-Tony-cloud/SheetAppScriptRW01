@@ -325,8 +325,42 @@
               <div class="col-md-4 mb-3"><label class="form-label">อายุ</label><input type="number" class="form-control" name="col6"></div>
               <div class="col-md-6 mb-3"><label class="form-label">เลขบัตร ปชช.</label><input type="text" class="form-control" name="col7" maxlength="13"></div>
               <div class="col-md-6 mb-3"><label class="form-label">เบอร์โทร</label><input type="text" class="form-control" name="col9"></div>
-              <div class="col-12 mb-3"><label class="form-label">ที่อยู่ปัจจุบัน</label><textarea class="form-control" name="col8" rows="2"></textarea></div>
-              <div class="col-12"><label class="form-label">ที่อยู่ภูมิลำเนา</label><textarea class="form-control" name="col38" rows="2"></textarea></div>
+              <!-- ที่อยู่ปัจจุบัน (structured — col64-71) -->
+              <div class="col-12 mb-3">
+                <label class="form-label fw-bold text-primary"><i class="fas fa-map-marker-alt"></i> ที่อยู่ปัจจุบัน</label>
+                <div class="row g-2 mt-1">
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">บ้านเลขที่</label><input type="text" class="form-control form-control-sm" name="col64" placeholder="เช่น 123/4"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col65" placeholder="เช่น 5"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">ซอย</label><input type="text" class="form-control form-control-sm" name="col66"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">ถนน</label><input type="text" class="form-control form-control-sm" name="col67"></div>
+                  <div class="col-6 col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><input type="text" class="form-control form-control-sm" name="col68"></div>
+                  <div class="col-6 col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><input type="text" class="form-control form-control-sm" name="col69"></div>
+                  <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label>
+                    <select class="form-select form-select-sm" name="col70" id="currentAddressProvince">
+                      <option value="">-- เลือกจังหวัด --</option>
+                    </select>
+                  </div>
+                  <div class="col-12"><label class="form-label form-label-sm">สถานีตำรวจที่พื้นที่รับผิดชอบ</label><input type="text" class="form-control form-control-sm" name="col71"></div>
+                </div>
+              </div>
+              <!-- ที่อยู่ภูมิลำเนา (structured — col72-79) -->
+              <div class="col-12">
+                <label class="form-label fw-bold text-primary"><i class="fas fa-home"></i> ที่อยู่ภูมิลำเนา</label>
+                <div class="row g-2 mt-1">
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">บ้านเลขที่</label><input type="text" class="form-control form-control-sm" name="col72" placeholder="เช่น 123/4"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col73" placeholder="เช่น 5"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">ซอย</label><input type="text" class="form-control form-control-sm" name="col74"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">ถนน</label><input type="text" class="form-control form-control-sm" name="col75"></div>
+                  <div class="col-6 col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><input type="text" class="form-control form-control-sm" name="col76"></div>
+                  <div class="col-6 col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><input type="text" class="form-control form-control-sm" name="col77"></div>
+                  <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label>
+                    <select class="form-select form-select-sm" name="col78" id="domicileProvince">
+                      <option value="">-- เลือกจังหวัด --</option>
+                    </select>
+                  </div>
+                  <div class="col-12"><label class="form-label form-label-sm">สถานีตำรวจที่พื้นที่รับผิดชอบ</label><input type="text" class="form-control form-control-sm" name="col79"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -366,9 +400,14 @@
           <div class="card-body p-4 bg-white">
             <div class="row">
               <div class="col-12 mb-3"><label class="form-label">1. เป็นเรื่องอะไร โดยสังเขป</label><textarea class="form-control" name="col18" rows="2"></textarea></div>
+              <!-- สถานที่เกิดเรื่อง (col80-84 + reuse col39/40/41) -->
               <div class="col-12 mb-3">
-                <label class="form-label fw-bold text-danger">สถานที่เกิดเรื่อง</label>
+                <label class="form-label fw-bold text-danger"><i class="fas fa-map-pin"></i> สถานที่เกิดเรื่อง</label>
                 <div class="row g-2 mt-1">
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">บ้านเลขที่</label><input type="text" class="form-control form-control-sm" name="col80"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col81"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">ซอย</label><input type="text" class="form-control form-control-sm" name="col82"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">ถนน</label><input type="text" class="form-control form-control-sm" name="col83"></div>
                   <div class="col-md-4">
                     <label class="form-label">จังหวัด</label>
                     <select class="form-select" name="col39" id="incidentProvince" onchange="onIncidentProvinceChange(this)">
@@ -387,6 +426,7 @@
                       <option value="">-- เลือกตำบล/แขวง --</option>
                     </select>
                   </div>
+                  <div class="col-12"><label class="form-label form-label-sm">สถานีตำรวจที่พื้นที่รับผิดชอบ</label><input type="text" class="form-control form-control-sm" name="col84"></div>
                 </div>
               </div>
               <div class="col-md-6 mb-3">
@@ -430,7 +470,36 @@
               <div class="col-md-8 mb-3"><label class="form-label">ระบุ (หน่วยใด/ผลอย่างไร)</label><input type="text" class="form-control" name="col20"></div>
               <div class="col-md-6 mb-3"><label class="form-label">5. ทราบเรื่องการถวายฎีกาจากที่ใด</label><input type="text" class="form-control" name="col21"></div>
               <div class="col-md-6 mb-3"><label class="form-label">6. เดินทางมาจากจังหวัดใด</label><input type="text" class="form-control" name="col22"></div>
-              <div class="col-md-6 mb-3"><label class="form-label">7. สถานที่พักในกรุงเทพฯ</label><input type="text" class="form-control" name="col23"></div>
+              <!-- สถานที่พักใน กทม (col85-93 conditional) -->
+              <div class="col-12 mb-3">
+                <label class="form-label fw-bold">7. สถานที่พักในกรุงเทพฯ</label>
+                <div class="d-flex gap-4 mb-2">
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="col85" id="bangkokStayNo" value="ไม่มีสถานที่พัก" checked onchange="onBangkokStayToggle()">
+                    <label class="form-check-label" for="bangkokStayNo">ไม่มีสถานที่พัก</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="col85" id="bangkokStayYes" value="มีสถานที่พัก" onchange="onBangkokStayToggle()">
+                    <label class="form-check-label" for="bangkokStayYes">มีสถานที่พัก</label>
+                  </div>
+                </div>
+                <div id="bangkokStayFields" class="d-none border rounded p-3 bg-light">
+                  <div class="row g-2">
+                    <div class="col-6 col-md-3"><label class="form-label form-label-sm">บ้านเลขที่</label><input type="text" class="form-control form-control-sm" name="col86"></div>
+                    <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col87"></div>
+                    <div class="col-6 col-md-3"><label class="form-label form-label-sm">ซอย</label><input type="text" class="form-control form-control-sm" name="col88"></div>
+                    <div class="col-6 col-md-3"><label class="form-label form-label-sm">ถนน</label><input type="text" class="form-control form-control-sm" name="col89"></div>
+                    <div class="col-6 col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><input type="text" class="form-control form-control-sm" name="col90"></div>
+                    <div class="col-6 col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><input type="text" class="form-control form-control-sm" name="col91"></div>
+                    <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label>
+                      <select class="form-select form-select-sm" name="col92" id="bangkokStayProvince">
+                        <option value="">-- เลือกจังหวัด --</option>
+                      </select>
+                    </div>
+                    <div class="col-12"><label class="form-label form-label-sm">สถานีตำรวจที่พื้นที่รับผิดชอบ</label><input type="text" class="form-control form-control-sm" name="col93"></div>
+                  </div>
+                </div>
+              </div>
               <div class="col-md-6 mb-3"><label class="form-label">8. ใช้ยานพาหนะอะไร</label><input type="text" class="form-control" name="col24"></div>
             </div>
           </div>
@@ -791,9 +860,11 @@
       });
 
       if (activeProvinceFilter) {
-        filteredData = filteredData.filter(item =>
-          extractProvince((item.data[7] || '').toString().trim()) === activeProvinceFilter
-        );
+        filteredData = filteredData.filter(item => {
+          const structured = (item.data[69] || '').toString().trim();
+          const p = structured || extractProvince((item.data[7] || '').toString().trim());
+          return p === activeProvinceFilter;
+        });
       }
 
       if (activeTopicFilter) {
@@ -1002,7 +1073,9 @@
     function computeTopProvinces(dataArray, topN) {
       const freq = {};
       dataArray.forEach(item => {
-        const p = extractProvince((item.data[7] || '').toString().trim());
+        // Prefer structured col70 (current_address_province, index 69); fallback to text-extract from old col8 (index 7)
+        const structured = (item.data[69] || '').toString().trim();
+        const p = structured || extractProvince((item.data[7] || '').toString().trim());
         if (p) freq[p] = (freq[p] || 0) + 1;
       });
       return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, topN);
@@ -1085,8 +1158,38 @@
             '<div class="col-md-6"><div class="detail-label">อายุ:</div><div class="detail-value">' + (row[5] ? row[5]+' ปี' : '-') + '</div></div>' +
             '<div class="col-md-6"><div class="detail-label">เลขบัตร ปชช:</div><div class="detail-value">' + idCard + '</div></div>' +
             '<div class="col-md-6"><div class="detail-label">เบอร์โทร:</div><div class="detail-value">' + phone1 + '</div></div>' +
-            '<div class="col-12"><div class="detail-label">ที่อยู่ปัจจุบัน:</div><div class="detail-value">' + (row[7]||'-') + '</div></div>' +
-            '<div class="col-12"><div class="detail-label">ที่อยู่ภูมิลำเนา:</div><div class="detail-value">' + (row[37]||'-') + '</div></div>' +
+            '<div class="col-12">' +
+              '<div class="detail-label">ที่อยู่ปัจจุบัน:</div>' +
+              (row[7] ? '<div class="text-muted fst-italic mb-1" style="font-size:0.85rem;">' + row[7] + '</div>' : '') +
+              ((row[63]||row[64]||row[65]||row[66]||row[67]||row[68]||row[69]||row[70]) ?
+                '<div class="row g-1">' +
+                (row[63] ? '<div class="col-6 col-md-3"><small class="text-muted">บ้านเลขที่</small><div class="detail-value mb-1">' + row[63] + '</div></div>' : '') +
+                (row[64] ? '<div class="col-6 col-md-3"><small class="text-muted">หมู่ที่</small><div class="detail-value mb-1">' + row[64] + '</div></div>' : '') +
+                (row[65] ? '<div class="col-6 col-md-3"><small class="text-muted">ซอย</small><div class="detail-value mb-1">' + row[65] + '</div></div>' : '') +
+                (row[66] ? '<div class="col-6 col-md-3"><small class="text-muted">ถนน</small><div class="detail-value mb-1">' + row[66] + '</div></div>' : '') +
+                (row[67] ? '<div class="col-6 col-md-4"><small class="text-muted">ตำบล/แขวง</small><div class="detail-value mb-1">' + row[67] + '</div></div>' : '') +
+                (row[68] ? '<div class="col-6 col-md-4"><small class="text-muted">อำเภอ/เขต</small><div class="detail-value mb-1">' + row[68] + '</div></div>' : '') +
+                (row[69] ? '<div class="col-6 col-md-4"><small class="text-muted">จังหวัด</small><div class="detail-value mb-1">' + row[69] + '</div></div>' : '') +
+                (row[70] ? '<div class="col-12"><small class="text-muted">สน.พื้นที่</small><div class="detail-value mb-1">' + row[70] + '</div></div>' : '') +
+                '</div>'
+              : (!row[7] ? '<div class="detail-value">-</div>' : '')) +
+            '</div>' +
+            '<div class="col-12">' +
+              '<div class="detail-label">ที่อยู่ภูมิลำเนา:</div>' +
+              (row[37] ? '<div class="text-muted fst-italic mb-1" style="font-size:0.85rem;">' + row[37] + '</div>' : '') +
+              ((row[71]||row[72]||row[73]||row[74]||row[75]||row[76]||row[77]||row[78]) ?
+                '<div class="row g-1">' +
+                (row[71] ? '<div class="col-6 col-md-3"><small class="text-muted">บ้านเลขที่</small><div class="detail-value mb-1">' + row[71] + '</div></div>' : '') +
+                (row[72] ? '<div class="col-6 col-md-3"><small class="text-muted">หมู่ที่</small><div class="detail-value mb-1">' + row[72] + '</div></div>' : '') +
+                (row[73] ? '<div class="col-6 col-md-3"><small class="text-muted">ซอย</small><div class="detail-value mb-1">' + row[73] + '</div></div>' : '') +
+                (row[74] ? '<div class="col-6 col-md-3"><small class="text-muted">ถนน</small><div class="detail-value mb-1">' + row[74] + '</div></div>' : '') +
+                (row[75] ? '<div class="col-6 col-md-4"><small class="text-muted">ตำบล/แขวง</small><div class="detail-value mb-1">' + row[75] + '</div></div>' : '') +
+                (row[76] ? '<div class="col-6 col-md-4"><small class="text-muted">อำเภอ/เขต</small><div class="detail-value mb-1">' + row[76] + '</div></div>' : '') +
+                (row[77] ? '<div class="col-6 col-md-4"><small class="text-muted">จังหวัด</small><div class="detail-value mb-1">' + row[77] + '</div></div>' : '') +
+                (row[78] ? '<div class="col-12"><small class="text-muted">สน.พื้นที่</small><div class="detail-value mb-1">' + row[78] + '</div></div>' : '') +
+                '</div>'
+              : (!row[37] ? '<div class="detail-value">-</div>' : '')) +
+            '</div>' +
           '</div>' +
         '</div>' +
 
@@ -1108,16 +1211,39 @@
           '<div class="detail-section-title text-danger" style="border-color:#dc3545"><i class="fas fa-file-alt"></i> 3. รายละเอียดเรื่องร้องเรียน</div>' +
           '<div class="row">' +
             '<div class="col-12"><div class="detail-label">1. เป็นเรื่องอะไร โดยสังเขป:</div><div class="detail-value">' + (row[17]||'-') + '</div></div>' +
-            '<div class="col-md-4"><div class="detail-label">สถานที่เกิดเรื่อง จังหวัด:</div><div class="detail-value">' + (row[38]||'-') + '</div></div>' +
-            '<div class="col-md-4"><div class="detail-label">อำเภอ/เขต:</div><div class="detail-value">' + (row[39]||'-') + '</div></div>' +
-            '<div class="col-md-4"><div class="detail-label">ตำบล/แขวง:</div><div class="detail-value">' + (row[40]||'-') + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">สถานที่เกิดเรื่อง:</div>' +
+              '<div class="row g-1 mt-1">' +
+              (row[79] ? '<div class="col-6 col-md-3"><small class="text-muted">บ้านเลขที่</small><div class="detail-value mb-1">' + row[79] + '</div></div>' : '') +
+              (row[80] ? '<div class="col-6 col-md-3"><small class="text-muted">หมู่ที่</small><div class="detail-value mb-1">' + row[80] + '</div></div>' : '') +
+              (row[81] ? '<div class="col-6 col-md-3"><small class="text-muted">ซอย</small><div class="detail-value mb-1">' + row[81] + '</div></div>' : '') +
+              (row[82] ? '<div class="col-6 col-md-3"><small class="text-muted">ถนน</small><div class="detail-value mb-1">' + row[82] + '</div></div>' : '') +
+              '<div class="col-md-4"><small class="text-muted">จังหวัด</small><div class="detail-value mb-1">' + (row[38]||'-') + '</div></div>' +
+              '<div class="col-md-4"><small class="text-muted">อำเภอ/เขต</small><div class="detail-value mb-1">' + (row[39]||'-') + '</div></div>' +
+              '<div class="col-md-4"><small class="text-muted">ตำบล/แขวง</small><div class="detail-value mb-1">' + (row[40]||'-') + '</div></div>' +
+              (row[83] ? '<div class="col-12"><small class="text-muted">สน.พื้นที่</small><div class="detail-value mb-1">' + row[83] + '</div></div>' : '') +
+              '</div></div>' +
             '<div class="col-md-6"><div class="detail-label">2. ประเภทของเรื่องที่ยื่น:</div><div class="detail-value">' + (row[35]||'-') + '</div></div>' +
             '<div class="col-md-6"><div class="detail-label">3. สาเหตุของเรื่องที่ยื่น:</div><div class="detail-value">' + (row[36]||'-') + '</div></div>' +
             '<div class="col-md-4"><div class="detail-label">4. เคยยื่นร้องเรียนหน่วยใด:</div><div class="detail-value">' + (row[18]||'-') + '</div></div>' +
             '<div class="col-md-8"><div class="detail-label">ระบุ (หน่วยใด/ผลอย่างไร):</div><div class="detail-value">' + (row[19]||'-') + '</div></div>' +
             '<div class="col-md-6"><div class="detail-label">5. ทราบเรื่องจากที่ใด:</div><div class="detail-value">' + (row[20]||'-') + '</div></div>' +
             '<div class="col-md-6"><div class="detail-label">6. เดินทางมาจากจังหวัดใด:</div><div class="detail-value">' + (row[21]||'-') + '</div></div>' +
-            '<div class="col-md-6"><div class="detail-label">7. สถานที่พักใน กทม:</div><div class="detail-value">' + (row[22]||'-') + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">7. สถานที่พักในกรุงเทพฯ:</div>' +
+              (row[22] ? '<div class="text-muted fst-italic mb-1" style="font-size:0.85rem;">' + row[22] + '</div>' : '') +
+              (row[84] ? '<div class="detail-value mb-1">' + row[84] + '</div>' : '') +
+              ((row[85]||row[91]) ?
+                '<div class="row g-1">' +
+                (row[85] ? '<div class="col-6"><small class="text-muted">บ้านเลขที่</small><div class="detail-value mb-1">' + row[85] + '</div></div>' : '') +
+                (row[86] ? '<div class="col-6"><small class="text-muted">หมู่ที่</small><div class="detail-value mb-1">' + row[86] + '</div></div>' : '') +
+                (row[87] ? '<div class="col-6"><small class="text-muted">ซอย</small><div class="detail-value mb-1">' + row[87] + '</div></div>' : '') +
+                (row[88] ? '<div class="col-6"><small class="text-muted">ถนน</small><div class="detail-value mb-1">' + row[88] + '</div></div>' : '') +
+                (row[89] ? '<div class="col-12"><small class="text-muted">ตำบล/แขวง</small><div class="detail-value mb-1">' + row[89] + '</div></div>' : '') +
+                (row[90] ? '<div class="col-6"><small class="text-muted">อำเภอ/เขต</small><div class="detail-value mb-1">' + row[90] + '</div></div>' : '') +
+                (row[91] ? '<div class="col-6"><small class="text-muted">จังหวัด</small><div class="detail-value mb-1">' + row[91] + '</div></div>' : '') +
+                (row[92] ? '<div class="col-12"><small class="text-muted">สน.พื้นที่</small><div class="detail-value mb-1">' + row[92] + '</div></div>' : '') +
+                '</div>'
+              : (!row[22] && !row[84] ? '<div class="detail-value">-</div>' : '')) +
+            '</div>' +
             '<div class="col-md-6"><div class="detail-label">8. ใช้ยานพาหนะอะไร:</div><div class="detail-value">' + (row[23]||'-') + '</div></div>' +
           '</div>' +
         '</div>' +
@@ -1173,7 +1299,9 @@
 
     function populateFormForEdit(rowData) {
       const form = document.getElementById('dataForm');
-      for (let n = 2; n <= 38; n++) {
+      // col2-col93 (skip col85 which is handled separately as radio buttons)
+      for (let n = 2; n <= 93; n++) {
+        if (n === 85) continue;
         const el = form.querySelector('[name="col' + n + '"]');
         if (!el) continue;
         let val = (rowData[n - 1] || '').toString().replace(/^'/, '');
@@ -1185,6 +1313,25 @@
           el.value = val;
         }
       }
+      // Handle Bangkok stay radio (col85, rowData index 84)
+      const bangkokStatus = (rowData[84] || '').toString().trim();
+      const bangkokYes    = document.getElementById('bangkokStayYes');
+      const bangkokNo     = document.getElementById('bangkokStayNo');
+      if (bangkokYes && bangkokNo) {
+        if (bangkokStatus === 'มีสถานที่พัก') {
+          bangkokYes.checked = true;
+        } else {
+          bangkokNo.checked = true;
+        }
+        onBangkokStayToggle();
+        // Re-set bangkok province select after toggle shows the panel
+        if (bangkokStatus === 'มีสถานที่พัก') {
+          const bkProv = (rowData[91] || '').toString().replace(/^'/, '');
+          const bkEl   = document.getElementById('bangkokStayProvince');
+          if (bkEl && bkProv) { populateAddressProvinceDropdown('bangkokStayProvince'); bkEl.value = bkProv; }
+        }
+      }
+      // Restore incident location cascade (col39/40/41 = rowData index 38/39/40)
       const province = (rowData[38] || '').toString().replace(/^'/, '');
       const amphoe   = (rowData[39] || '').toString().replace(/^'/, '');
       const tambon   = (rowData[40] || '').toString().replace(/^'/, '');
@@ -1207,6 +1354,7 @@
       resetFormMode();
       document.getElementById('dataForm').reset();
       resetIncidentLocation();
+      resetAddressGroups();
       showView('dashboardView');
     }
 
@@ -1287,6 +1435,7 @@
           showToast(response.message, 'success');
           form.reset();
           resetIncidentLocation();
+          resetAddressGroups();
           if (isEdit) {
             resetFormMode();
             refreshDashboard();
@@ -1321,6 +1470,9 @@
         PROVINCES_STATIC.forEach(function(p) { provinceNameToId[p.name] = p.id; });
       }
       populateIncidentProvinceDropdown();
+      populateAddressProvinceDropdown('currentAddressProvince');
+      populateAddressProvinceDropdown('domicileProvince');
+      populateAddressProvinceDropdown('bangkokStayProvince');
     }
 
     function populateIncidentProvinceDropdown() {
@@ -1333,6 +1485,36 @@
       });
       el.disabled = false;
       if (cur) el.value = cur;
+    }
+
+    function populateAddressProvinceDropdown(elemId) {
+      const el = document.getElementById(elemId);
+      if (!el || !provincesData) return;
+      const cur = el.value;
+      el.innerHTML = '<option value="">-- เลือกจังหวัด --</option>';
+      provincesData.forEach(function(p) {
+        el.innerHTML += '<option value="' + p.name + '">' + p.name + '</option>';
+      });
+      if (cur) el.value = cur;
+    }
+
+    function onBangkokStayToggle() {
+      const hasStay = document.getElementById('bangkokStayYes').checked;
+      const fields  = document.getElementById('bangkokStayFields');
+      if (!fields) return;
+      if (hasStay) {
+        fields.classList.remove('d-none');
+        populateAddressProvinceDropdown('bangkokStayProvince');
+      } else {
+        fields.classList.add('d-none');
+      }
+    }
+
+    function resetAddressGroups() {
+      const bangkokNo = document.getElementById('bangkokStayNo');
+      if (bangkokNo) bangkokNo.checked = true;
+      const bangkokFields = document.getElementById('bangkokStayFields');
+      if (bangkokFields) bangkokFields.classList.add('d-none');
     }
 
     function onIncidentProvinceChange(el) {

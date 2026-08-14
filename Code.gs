@@ -259,7 +259,7 @@ function updateData(sheetRowNum, formObject, token) {
   try {
     var sheet      = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
     var existingId = sheet.getRange(sheetRowNum, 1).getValue();
-    var lastCol    = Math.max(63, sheet.getLastColumn());
+    var lastCol    = Math.max(93, sheet.getLastColumn());
     var existingVals = sheet.getRange(sheetRowNum, 1, 1, lastCol).getValues()[0];
     var updatedRow = buildDataRow(existingId, formObject, existingVals);
     sheet.getRange(sheetRowNum, 1, 1, updatedRow.length).setValues([updatedRow]);
@@ -341,7 +341,19 @@ function buildDataRow(recordId, f, existingVals) {
     col('col54', 53), col('col55', 54), col('col56', 55), col('col57', 56),
     col('col58', 57), col('col59', 58), col('col60', 59), col('col61', 60),
     createdAt,  // col62 — set once on create, preserved on update
-    updatedAt   // col63 — updated on every write
+    updatedAt,  // col63 — updated on every write
+    // Structured address groups col64-col93 (appended; old free-text cols 8/38/23 preserved via existingVals)
+    // A: ที่อยู่ปัจจุบัน
+    col('col64', 63),  col('col65', 64),  col('col66', 65),  col('col67', 66),
+    col('col68', 67),  col('col69', 68),  col('col70', 69),  col('col71', 70),
+    // B: ที่อยู่ภูมิลำเนา
+    col('col72', 71),  col('col73', 72),  col('col74', 73),  col('col75', 74),
+    col('col76', 75),  col('col77', 76),  col('col78', 77),  col('col79', 78),
+    // C: สถานที่เกิดเรื่อง extra (province/district/subdistrict reuse col39/40/41)
+    col('col80', 79),  col('col81', 80),  col('col82', 81),  col('col83', 82),  col('col84', 83),
+    // D: สถานที่พักใน กทม
+    col('col85', 84),  col('col86', 85),  col('col87', 86),  col('col88', 87),
+    col('col89', 88),  col('col90', 89),  col('col91', 90),  col('col92', 91),  col('col93', 92)
   ];
 }
 
@@ -612,6 +624,34 @@ function touchRecordUpdatedAt(recordId) {
       }
     }
   } catch(e) {}
+}
+
+/**
+ * Add structured address column headers (col64–col93) to the Data sheet.
+ * Run once from the Apps Script editor after deploying this version.
+ */
+function initAddressColumns() {
+  var sheet   = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var lastCol = sheet.getLastColumn();
+  if (lastCol >= 93) return { success: true, message: 'Address columns already present (lastCol=' + lastCol + ')' };
+  var headers = [
+    // col64-71: ที่อยู่ปัจจุบัน
+    'current_address_house_no','current_address_moo','current_address_soi','current_address_road',
+    'current_address_subdistrict','current_address_district','current_address_province','current_address_police_station',
+    // col72-79: ที่อยู่ภูมิลำเนา
+    'domicile_house_no','domicile_moo','domicile_soi','domicile_road',
+    'domicile_subdistrict','domicile_district','domicile_province','domicile_police_station',
+    // col80-84: สถานที่เกิดเรื่อง extra (province/district/subdistrict reuse col39/40/41)
+    'incident_house_no','incident_moo','incident_soi','incident_road','incident_police_station',
+    // col85-93: สถานที่พักใน กทม
+    'bangkok_stay_status',
+    'bangkok_stay_house_no','bangkok_stay_moo','bangkok_stay_soi','bangkok_stay_road',
+    'bangkok_stay_subdistrict','bangkok_stay_district','bangkok_stay_province','bangkok_stay_police_station'
+  ];
+  // Start at col64 (index 64, 1-based)
+  sheet.getRange(1, 64, 1, headers.length).setValues([headers]);
+  SpreadsheetApp.flush();
+  return { success: true, message: 'Added ' + headers.length + ' address column headers (col64–col93)' };
 }
 
 /**
