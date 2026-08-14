@@ -400,8 +400,14 @@ function getBatchAttachmentCounts() {
     if (r[8] === 'deleted') return;
     var recId = String(r[1]);
     var sec   = r[2];
-    if (!counts[recId]) counts[recId] = { officer_found: 0, person_portrait: 0, items_evidence: 0, total: 0 };
-    if (counts[recId][sec] !== undefined) counts[recId][sec]++;
+    if (!counts[recId]) counts[recId] = {
+      officer_found: 0, person_portrait: 0, items_evidence: 0,
+      appearance_photo: 0,
+      source_profile_71: 0, source_post_71: 0, source_other_71: 0,
+      source_profile_72: 0, source_post_72: 0, source_other_72: 0,
+      total: 0
+    };
+    if (sec in counts[recId]) counts[recId][sec]++;
     counts[recId].total++;
   });
   return counts;

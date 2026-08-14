@@ -3063,55 +3063,224 @@
       return filteredData;
     }
 
+    // ==================== FULL RAW EXPORT COLUMN MAP ====================
+    // r[i] = data array index i = col(i+1) in Google Sheet
+    // ph() forces text type so Excel never drops leading zeros
+    var FULL_EXPORT_COLS = (function() {
+      function g(r, i) { return (r[i] === null || r[i] === undefined) ? '' : r[i].toString().replace(/^'/, ''); }
+      function ph(r, i) { var v = g(r,i); return v ? {v:v, t:'s'} : ''; }
+      return [
+        // METADATA
+        {h:'ลำดับ',                              get:function(r,m){ return m.seq; }},
+        {h:'RecordID',                           get:function(r)  { return ph(r,0); }},
+        {h:'บันทึกเมื่อ',                        get:function(r)  { return g(r,61); }},
+        {h:'แก้ไขล่าสุด',                        get:function(r)  { return g(r,62); }},
+        // SECTION 1
+        {h:'1_วันที่บันทึก',                     get:function(r){ return g(r,1); }},
+        {h:'1_เวลาบันทึก',                       get:function(r){ return g(r,2); }},
+        {h:'1_สถานะหมายเสด็จ',                  get:function(r){ return g(r,41); }},
+        {h:'1_รายละเอียดหมายเสด็จ',             get:function(r){ return g(r,42); }},
+        // SECTION 2
+        {h:'2.1_ประเภทสถานที่ตรวจพบ',           get:function(r){ return g(r,43); }},
+        {h:'2.1_รายละเอียดสถานที่',              get:function(r){ return g(r,44); }},
+        {h:'2.2_วันที่ตรวจพบ',                   get:function(r){ return g(r,45); }},
+        {h:'2.2_เวลาตรวจพบ',                     get:function(r){ return g(r,46); }},
+        {h:'2.3_ยศผู้ตรวจพบ',                    get:function(r){ return g(r,47); }},
+        {h:'2.3_ชื่อผู้ตรวจพบ',                  get:function(r){ return g(r,48); }},
+        {h:'2.3_โทรศัพท์ผู้ตรวจพบ',             get:function(r){ return ph(r,49); }},
+        {h:'2.3_ตำแหน่ง/หน้าที่',               get:function(r){ return g(r,93); }},
+        // SECTION 3
+        {h:'3.1_การเก็บ/ตำแหน่งสิ่งของ',        get:function(r){ return g(r,52); }},
+        {h:'3.1_รายละเอียดการซ่อน',              get:function(r){ return g(r,53); }},
+        {h:'3.2_ลักษณะการนำพา',                  get:function(r){ return g(r,54); }},
+        {h:'3.2_รายละเอียดอื่นๆการนำพา',         get:function(r){ return g(r,94); }},
+        {h:'3.3_ประเภทบรรจุภัณฑ์',              get:function(r){ return g(r,55); }},
+        {h:'3.3_กว้างบรรจุภัณฑ์(ซม.)',          get:function(r){ return g(r,95); }},
+        {h:'3.3_ยาวบรรจุภัณฑ์(ซม.)',            get:function(r){ return g(r,96); }},
+        {h:'3.3_ที่มาบรรจุภัณฑ์',               get:function(r){ return g(r,97); }},
+        {h:'3.4_การใส่ซองเอกสาร',               get:function(r){ return g(r,56); }},
+        {h:'3.4_กว้างซอง(ซม.)',                 get:function(r){ return g(r,98); }},
+        {h:'3.4_ยาวซอง(ซม.)',                   get:function(r){ return g(r,99); }},
+        {h:'3.4_ที่มาซอง',                      get:function(r){ return g(r,100); }},
+        // SECTION 4 — PERSONAL
+        {h:'4_คำนำหน้า',                        get:function(r){ return g(r,3); }},
+        {h:'4_ชื่อ-สกุล',                       get:function(r){ return g(r,4); }},
+        {h:'4_อายุ',                            get:function(r){ return g(r,5); }},
+        {h:'4_เลขบัตรประชาชน',                  get:function(r){ return ph(r,6); }},
+        {h:'4_โทรศัพท์',                        get:function(r){ return ph(r,8); }},
+        {h:'4_การศึกษา',                        get:function(r){ return g(r,101); }},
+        {h:'4_สถานศึกษา',                       get:function(r){ return g(r,102); }},
+        {h:'4_อาชีพ',                           get:function(r){ return g(r,103); }},
+        {h:'4_รายได้ประมาณ',                    get:function(r){ return g(r,104); }},
+        {h:'4_ชื่อบิดา',                        get:function(r){ return g(r,105); }},
+        {h:'4_โทรศัพท์บิดา',                    get:function(r){ return ph(r,106); }},
+        {h:'4_ชื่อมารดา',                       get:function(r){ return g(r,107); }},
+        {h:'4_โทรศัพท์มารดา',                   get:function(r){ return ph(r,108); }},
+        {h:'4_ชื่อผู้ปกครอง',                   get:function(r){ return g(r,109); }},
+        {h:'4_โทรศัพท์ผู้ปกครอง',               get:function(r){ return ph(r,110); }},
+        {h:'4_ชื่อบุคคลติดต่อ',                 get:function(r){ return g(r,24); }},
+        {h:'4_ความเกี่ยวข้อง',                  get:function(r){ return g(r,25); }},
+        {h:'4_โทรศัพท์บุคคลติดต่อ',             get:function(r){ return ph(r,26); }},
+        // CURRENT ADDRESS (col64-71 = idx63-70)
+        {h:'ที่อยู่ปัจจุบัน_บ้านเลขที่',        get:function(r){ return g(r,63); }},
+        {h:'ที่อยู่ปัจจุบัน_หมู่',              get:function(r){ return g(r,64); }},
+        {h:'ที่อยู่ปัจจุบัน_ซอย',               get:function(r){ return g(r,65); }},
+        {h:'ที่อยู่ปัจจุบัน_ถนน',               get:function(r){ return g(r,66); }},
+        {h:'ที่อยู่ปัจจุบัน_ตำบลแขวง',          get:function(r){ return g(r,67); }},
+        {h:'ที่อยู่ปัจจุบัน_อำเภอเขต',          get:function(r){ return g(r,68); }},
+        {h:'ที่อยู่ปัจจุบัน_จังหวัด',            get:function(r){ return g(r,69); }},
+        {h:'ที่อยู่ปัจจุบัน_สถานีตำรวจ',        get:function(r){ return g(r,70); }},
+        // DOMICILE ADDRESS (col72-79 = idx71-78)
+        {h:'ภูมิลำเนา_บ้านเลขที่',              get:function(r){ return g(r,71); }},
+        {h:'ภูมิลำเนา_หมู่',                    get:function(r){ return g(r,72); }},
+        {h:'ภูมิลำเนา_ซอย',                     get:function(r){ return g(r,73); }},
+        {h:'ภูมิลำเนา_ถนน',                     get:function(r){ return g(r,74); }},
+        {h:'ภูมิลำเนา_ตำบลแขวง',               get:function(r){ return g(r,75); }},
+        {h:'ภูมิลำเนา_อำเภอเขต',               get:function(r){ return g(r,76); }},
+        {h:'ภูมิลำเนา_จังหวัด',                 get:function(r){ return g(r,77); }},
+        {h:'ภูมิลำเนา_สถานีตำรวจ',             get:function(r){ return g(r,78); }},
+        // SECTION 5
+        {h:'5_การแต่งกาย',                      get:function(r){ return g(r,9); }},
+        {h:'5_รายละเอียดการแต่งกาย',            get:function(r){ return g(r,10); }},
+        {h:'5_การสนทนา',                        get:function(r){ return g(r,13); }},
+        {h:'5_รายละเอียดการสนทนา',              get:function(r){ return g(r,14); }},
+        {h:'5_เคยมารับเสด็จ',                   get:function(r){ return g(r,15); }},
+        {h:'5_จำนวนครั้งรับเสด็จ',              get:function(r){ return g(r,111); }},
+        {h:'5_สถานที่รับเสด็จ',                 get:function(r){ return g(r,16); }},
+        // SECTION 6
+        {h:'6.1_ประเภทการยื่น',                 get:function(r){ return g(r,112); }},
+        {h:'6.1_เรื่องโดยสังเขป',               get:function(r){ return g(r,17); }},
+        {h:'6.2_ประเภทของเรื่อง',               get:function(r){ return g(r,35); }},
+        {h:'6.3_สาเหตุของเรื่อง',               get:function(r){ return g(r,36); }},
+        // INCIDENT ADDRESS (col80-84=idx79-83, col39-41=idx38-40)
+        {h:'สถานที่เกิดเรื่อง_บ้านเลขที่',      get:function(r){ return g(r,79); }},
+        {h:'สถานที่เกิดเรื่อง_หมู่',            get:function(r){ return g(r,80); }},
+        {h:'สถานที่เกิดเรื่อง_ซอย',             get:function(r){ return g(r,81); }},
+        {h:'สถานที่เกิดเรื่อง_ถนน',             get:function(r){ return g(r,82); }},
+        {h:'สถานที่เกิดเรื่อง_ตำบลแขวง',        get:function(r){ return g(r,40); }},
+        {h:'สถานที่เกิดเรื่อง_อำเภอเขต',        get:function(r){ return g(r,39); }},
+        {h:'สถานที่เกิดเรื่อง_จังหวัด',          get:function(r){ return g(r,38); }},
+        {h:'สถานที่เกิดเรื่อง_สถานีตำรวจ',      get:function(r){ return g(r,83); }},
+        // PRIOR COMPLAINT
+        {h:'6.4_เคยร้องเรียนมาก่อน',            get:function(r){ return g(r,18); }},
+        {h:'6.4_รายละเอียดการร้องเรียน',         get:function(r){ return g(r,19); }},
+        // TRAVEL
+        {h:'6.5_จังหวัดที่เดินทางมา',           get:function(r){ return g(r,21); }},
+        {h:'6.7_ยานพาหนะ',                      get:function(r){ return g(r,23); }},
+        // BANGKOK STAY (col85=idx84 status; col86-93=idx85-92 address)
+        {h:'6.6_สถานะที่พักกรุงเทพฯ',           get:function(r){ return g(r,84); }},
+        {h:'ที่พักกรุงเทพ_บ้านเลขที่',          get:function(r){ return g(r,85); }},
+        {h:'ที่พักกรุงเทพ_หมู่',                get:function(r){ return g(r,86); }},
+        {h:'ที่พักกรุงเทพ_ซอย',                 get:function(r){ return g(r,87); }},
+        {h:'ที่พักกรุงเทพ_ถนน',                 get:function(r){ return g(r,88); }},
+        {h:'ที่พักกรุงเทพ_ตำบลแขวง',            get:function(r){ return g(r,89); }},
+        {h:'ที่พักกรุงเทพ_อำเภอเขต',            get:function(r){ return g(r,90); }},
+        {h:'ที่พักกรุงเทพ_จังหวัด',              get:function(r){ return g(r,91); }},
+        {h:'ที่พักกรุงเทพ_สถานีตำรวจ',          get:function(r){ return g(r,92); }},
+        // SECTION 7.1 (col21=idx20 source type; col114-128=idx113-127)
+        {h:'7.1_แหล่งที่มา',                    get:function(r){ return g(r,20); }},
+        {h:'7.1_ชื่อ-สกุลบุคคล',               get:function(r){ return g(r,113); }},
+        {h:'7.1_อายุบุคคล',                     get:function(r){ return g(r,114); }},
+        {h:'7.1_เลขบัตรบุคคล',                 get:function(r){ return ph(r,115); }},
+        {h:'7.1_โทรศัพท์บุคคล',                get:function(r){ return ph(r,116); }},
+        {h:'7.1_การศึกษาบุคคล',                get:function(r){ return g(r,117); }},
+        {h:'7.1_สถานศึกษาบุคคล',               get:function(r){ return g(r,118); }},
+        {h:'7.1_อาชีพบุคคล',                   get:function(r){ return g(r,119); }},
+        {h:'7.1_รายได้บุคคล',                  get:function(r){ return g(r,120); }},
+        {h:'7.1_Platform',                      get:function(r){ return g(r,121); }},
+        {h:'7.1_ProfileURL',                    get:function(r){ return g(r,122); }},
+        {h:'7.1_ProfileName',                   get:function(r){ return g(r,123); }},
+        {h:'7.1_Followers',                     get:function(r){ return g(r,124); }},
+        {h:'7.1_PostURL',                       get:function(r){ return g(r,125); }},
+        {h:'7.1_PostDate',                      get:function(r){ return g(r,126); }},
+        {h:'7.1_อื่นๆ',                         get:function(r){ return g(r,127); }},
+        // SECTION 7.2 (col29=idx28 source type; col129-143=idx128-142)
+        {h:'7.2_แหล่งที่มา',                    get:function(r){ return g(r,28); }},
+        {h:'7.2_ชื่อ-สกุลบุคคล',               get:function(r){ return g(r,128); }},
+        {h:'7.2_อายุบุคคล',                     get:function(r){ return g(r,129); }},
+        {h:'7.2_เลขบัตรบุคคล',                 get:function(r){ return ph(r,130); }},
+        {h:'7.2_โทรศัพท์บุคคล',                get:function(r){ return ph(r,131); }},
+        {h:'7.2_การศึกษาบุคคล',                get:function(r){ return g(r,132); }},
+        {h:'7.2_สถานศึกษาบุคคล',               get:function(r){ return g(r,133); }},
+        {h:'7.2_อาชีพบุคคล',                   get:function(r){ return g(r,134); }},
+        {h:'7.2_รายได้บุคคล',                  get:function(r){ return g(r,135); }},
+        {h:'7.2_Platform',                      get:function(r){ return g(r,136); }},
+        {h:'7.2_ProfileURL',                    get:function(r){ return g(r,137); }},
+        {h:'7.2_ProfileName',                   get:function(r){ return g(r,138); }},
+        {h:'7.2_Followers',                     get:function(r){ return g(r,139); }},
+        {h:'7.2_PostURL',                       get:function(r){ return g(r,140); }},
+        {h:'7.2_PostDate',                      get:function(r){ return g(r,141); }},
+        {h:'7.2_อื่นๆ',                         get:function(r){ return g(r,142); }},
+        // SECTION 7.3–7.9
+        {h:'7.3_ความตั้งใจ/การเดินทาง',         get:function(r){ return g(r,27); }},
+        {h:'7.4_เคยมายื่นที่วัง',               get:function(r){ return g(r,29); }},
+        {h:'7.4_จำนวนครั้ง',                    get:function(r){ return g(r,143); }},
+        {h:'7.4_รายละเอียด',                    get:function(r){ return g(r,30); }},
+        {h:'7.4_วันที่ครั้งที่1',               get:function(r){ return g(r,144); }},
+        {h:'7.4_วันที่ครั้งที่2',               get:function(r){ return g(r,145); }},
+        {h:'7.4_วันที่ครั้งที่3',               get:function(r){ return g(r,146); }},
+        {h:'7.4_วันที่ครั้งที่4',               get:function(r){ return g(r,147); }},
+        {h:'7.4_มาส่งเอกสาร',                  get:function(r){ return g(r,148); }},
+        {h:'7.4_วันที่ส่งเอกสาร',              get:function(r){ return g(r,149); }},
+        {h:'7.4_รายละเอียดเอกสาร',             get:function(r){ return g(r,150); }},
+        {h:'7.5_ยื่นที่อื่นก่อนมาสน.',         get:function(r){ return g(r,31); }},
+        {h:'7.6_เคยมายื่นที่อื่น',             get:function(r){ return g(r,32); }},
+        {h:'7.7_หลักฐานความคืบหน้า',           get:function(r){ return g(r,33); }},
+        {h:'7.8_อื่นๆ',                        get:function(r){ return g(r,34); }},
+        {h:'7.9_จะเดินทางไปที่ใด',             get:function(r){ return g(r,151); }},
+        // ATTACHMENT COUNTS (from globalAttachmentCounts per RecordID)
+        {h:'จำนวนรูป_เจ้าหน้าที่ผู้ตรวจพบ',   get:function(r,m){ return (m.ac.officer_found||0); }},
+        {h:'จำนวนรูป_สิ่งของเอกสาร',           get:function(r,m){ return (m.ac.items_evidence||0); }},
+        {h:'จำนวนรูป_บุคคล',                   get:function(r,m){ return (m.ac.person_portrait||0); }},
+        {h:'จำนวนรูป_การแต่งกาย',              get:function(r,m){ return (m.ac.appearance_photo||0); }},
+        {h:'จำนวนรูป_7.1_Profile',             get:function(r,m){ return (m.ac.source_profile_71||0); }},
+        {h:'จำนวนรูป_7.1_Post',                get:function(r,m){ return (m.ac.source_post_71||0); }},
+        {h:'จำนวนรูป_7.1_Other',               get:function(r,m){ return (m.ac.source_other_71||0); }},
+        {h:'จำนวนรูป_7.2_Profile',             get:function(r,m){ return (m.ac.source_profile_72||0); }},
+        {h:'จำนวนรูป_7.2_Post',                get:function(r,m){ return (m.ac.source_post_72||0); }},
+        {h:'จำนวนรูป_7.2_Other',               get:function(r,m){ return (m.ac.source_other_72||0); }},
+        {h:'จำนวนรูปทั้งหมด',                   get:function(r,m){ return (m.ac.total||0); }},
+        // COMPUTED
+        {h:'ครั้งที่มา',                        get:function(r,m){ return m.isReturn ? 'มาซ้ำ' : 'ครั้งแรก'; }},
+        {h:'ความครบถ้วน%',                      get:function(r,m){ return m.comp.percent; }},
+        {h:'field_ที่ขาด',                      get:function(r,m){ return m.comp.missingCount; }},
+        // LEGACY FIELDS (old schema — preserved for 419+ existing records)
+        {h:'legacy_ที่อยู่ปัจจุบัน_เดิม',      get:function(r){ return g(r,7); }},
+        {h:'legacy_ภูมิลำเนา_เดิม',            get:function(r){ return g(r,37); }},
+        {h:'legacy_สถานที่พักกทม_เดิม',        get:function(r){ return g(r,22); }},
+        {h:'legacy_กระเป๋า/อุปกรณ์',           get:function(r){ return g(r,11); }},
+        {h:'legacy_ระบุกระเป๋า',               get:function(r){ return g(r,12); }},
+        {h:'legacy_วันส่งมอบ',                 get:function(r){ return g(r,50); }},
+        {h:'legacy_เวลาส่งมอบ',                get:function(r){ return g(r,51); }},
+        {h:'legacy_ลักษณะซอง',                 get:function(r){ return g(r,57); }},
+        {h:'legacy_col59',                      get:function(r){ return g(r,58); }},
+        {h:'legacy_สีซอง',                     get:function(r){ return g(r,59); }},
+        {h:'legacy_col61',                      get:function(r){ return g(r,60); }}
+      ];
+    })();
+
     function exportExcel(scope) {
       var data = getExportData(scope);
       if (!data.length) { showToast('ไม่มีข้อมูลที่จะส่งออก', 'warning'); return; }
       if (typeof XLSX === 'undefined') { showToast('โหลด SheetJS ไม่สำเร็จ', 'danger'); return; }
-      var headers = [
-        'RecordID','วันที่','เวลา','คำนำหน้า','ชื่อ-สกุล','อายุ','เลขบัตร ปชช','ที่อยู่ปัจจุบัน','เบอร์โทร',
-        'การแต่งกาย','ระบุ(แต่งกาย)','กระเป๋า/อุปกรณ์','ระบุ(กระเป๋า)','พูดคุยรู้เรื่อง','ระบุ(พูดคุย)',
-        'เคยมารับเสด็จ','ระบุ(รับเสด็จ)','เรื่องโดยสังเขป','เคยยื่นร้องเรียน','ระบุ(หน่วย/ผล)',
-        'ทราบจากที่ใด','เดินทางจากจังหวัด','สถานที่พักกทม','ยานพาหนะ','ชื่อผู้ติดต่อ','ความเกี่ยวข้อง',
-        'เบอร์ผู้ติดต่อ','ความตั้งใจวันนี้','ทราบขบวนเสด็จจาก','เคยมายื่นฎีกาที่นี่','ระบุ(เคยมา)',
-        'ยื่นที่อื่นก่อนมาสน.','เคยมายื่นที่อื่น','หลักฐานความคืบหน้า','หมายเหตุ',
-        'ประเภทเรื่อง','สาเหตุเรื่อง','ที่อยู่ภูมิลำเนา','จังหวัดเกิดเหตุ','อำเภอเกิดเหตุ','ตำบลเกิดเหตุ',
-        'หมายฯ','รายละเอียดหมายฯ','สถานที่พบ','รายละเอียดสถานที่','วันที่พบ','เวลาที่พบ',
-        'ยศเจ้าหน้าที่','ชื่อเจ้าหน้าที่','เบอร์เจ้าหน้าที่','วันที่นำส่ง','เวลานำส่ง',
-        'การเก็บสิ่งของ','รายละเอียด(การเก็บ)','ลักษณะการนำพา','ภาชนะ','การใส่ซอง','ขนาดซอง',
-        'ขนาดอื่นๆ','สีซอง','สีอื่นๆ',
-        'ครั้งที่มา','ความครบถ้วน (%)','field ที่ขาด','CreatedAt','UpdatedAt'
-      ];
-      var PHONE_COLS = new Set([6, 8, 26, 49]);
-      var wsData = [headers];
-      data.forEach(function(item) {
-        var row  = item.data;
-        var comp = calculateRecordCompleteness(item, globalAttachmentCounts);
-        var isReturn = (row[29] || '').toString().trim() === 'เคย';
-        var xlRow = row.map(function(cell, i) {
-          var v = (cell === null || cell === undefined) ? '' : cell.toString().replace(/^'/, '');
-          return PHONE_COLS.has(i) ? { v: v, t: 's' } : v;
-        });
-        xlRow.push(isReturn ? 'มาซ้ำ' : 'ครั้งแรก');
-        xlRow.push(comp.percent);
-        xlRow.push(comp.missingCount);
-        xlRow.push((row[61] || '').toString());
-        xlRow.push((row[62] || '').toString());
-        wsData.push(xlRow);
+      var headers = FULL_EXPORT_COLS.map(function(c){ return c.h; });
+      var wsData  = [headers];
+      data.forEach(function(item, idx) {
+        var r        = item.data;
+        var rid      = String(r[0]);
+        var ac       = globalAttachmentCounts[rid] || {};
+        var comp     = calculateRecordCompleteness(item, globalAttachmentCounts);
+        var isReturn = (r[29] || '').toString().trim() === 'เคย';
+        var meta     = { seq: idx + 1, ac: ac, comp: comp, isReturn: isReturn };
+        wsData.push(FULL_EXPORT_COLS.map(function(col){ return col.get(r, meta); }));
       });
-      var ws = XLSX.utils.aoa_to_sheet(wsData);
-      var range = XLSX.utils.decode_range(ws['!ref']);
-      for (var r = 1; r <= range.e.r; r++) {
-        PHONE_COLS.forEach(function(ci) {
-          var addr = XLSX.utils.encode_cell({ r: r, c: ci });
-          if (ws[addr]) ws[addr].t = 's';
-        });
-      }
       var wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'ข้อมูล');
-      var now   = new Date();
-      var fname = 'RW01_' + now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2) + '_' + scope + '.xlsx';
-      XLSX.writeFile(wb, fname);
-      showToast('ส่งออก Excel ' + data.length + ' รายการแล้ว', 'success');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsData), 'ข้อมูล');
+      var now  = new Date();
+      var ds   = now.getFullYear() + '-' + ('0'+(now.getMonth()+1)).slice(-2) + '-' + ('0'+now.getDate()).slice(-2);
+      var lbl  = scope === 'all' ? 'All' : (scope === 'selected' ? 'Selected' : 'Filtered');
+      XLSX.writeFile(wb, 'RW01_FullRaw_' + lbl + '_' + ds + '.xlsx');
+      showToast('ส่งออก Excel ' + data.length + ' รายการ (' + headers.length + ' columns)', 'success');
     }
 
     function exportPDFSummary(scope) {
