@@ -57,6 +57,10 @@ function doPost(e) {
       if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initMetadataColumns();
     }
+    else if (action === 'initAddressColumns') {
+      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = initAddressColumns();
+    }
     else if (action === 'initRecordIdCounter') {
       if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initRecordIdCounter();
