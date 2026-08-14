@@ -25,6 +25,18 @@ const SECTION_MAX = {
   source_profile_72: 1, source_post_72: 3, source_other_72: 3
 };
 
+const USERS_SHEET_NAME = 'Users';
+const PERMISSIONS = {
+  viewer:      ['view_dashboard', 'view_records'],
+  report:      ['view_dashboard', 'view_records', 'export_records'],
+  operator:    ['view_dashboard', 'view_records', 'create_record', 'upload_attachment'],
+  admin:       ['view_dashboard', 'view_records', 'create_record', 'upload_attachment',
+                'edit_record', 'delete_record', 'export_records', 'manage_attachments'],
+  super_admin: ['view_dashboard', 'view_records', 'create_record', 'upload_attachment',
+                'edit_record', 'delete_record', 'export_records', 'manage_attachments',
+                'manage_users', 'manage_system']
+};
+
 // ===== HTTP ENTRY POINTS =====
 
 function doGet(e) {
@@ -48,47 +60,69 @@ function doGet(e) {
 function doPost(e) {
   var result;
   try {
-    var data = JSON.parse(e.postData.contents);
+    var data   = JSON.parse(e.postData.contents);
     var action = data.action || '';
-    if      (action === 'login')               result = loginAdmin(data.password || '');
-    else if (action === 'logout')              result = logoutAdmin(data.token || '');
-    else if (action === 'dashboard')           result = getDashboardData(data.token || '');
-    else if (action === 'submit')              result = submitData(data);
-    else if (action === 'update')              result = updateData(parseInt(data.sheetRow), data, data.token || '');
-    else if (action === 'delete')              result = deleteData(parseInt(data.sheetRow), data.token || '');
-    else if (action === 'uploadAttachment')    result = uploadAttachment(data);
-    else if (action === 'listAttachments')     result = listAttachments(data.recordId, data.token || '');
-    else if (action === 'getAttachmentData')   result = getAttachmentData(data.attachmentId, data.token || '');
-    else if (action === 'deleteAttachment')    result = deleteAttachmentRecord(data.attachmentId, data.token || '');
-    else if (action === 'cleanupTestRecords')  result = cleanupTestRecords(data.recordIds || [], data.token || '');
-    else if (action === 'checkDuplicate')       result = checkDuplicate(data, data.token || '');
-    else if (action === 'checkDuplicatePublic')  result = checkDuplicatePublic(data);
+    var token  = data.token  || '';
+    if      (action === 'loginUser')   result = loginUser(data.username || '', data.password || '');
+    else if (action === 'login')       result = loginAdmin(data.password || '');
+    else if (action === 'logout')      result = logoutAdmin(token);
+    else if (action === 'dashboard')   result = getDashboardData(token);
+    else if (action === 'submit') {
+      if (!hasPermission(token, 'create_record')) result = { success: false, message: 'ต้องเข้าสู่ระบบก่อนบันทึกข้อมูล' };
+      else result = submitData(data);
+    }
+    else if (action === 'update') {
+      if (!hasPermission(token, 'edit_record')) result = { success: false, message: 'ไม่มีสิทธิ์แก้ไขข้อมูล' };
+      else result = updateData(parseInt(data.sheetRow), data, token);
+    }
+    else if (action === 'delete') {
+      if (!hasPermission(token, 'delete_record')) result = { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูล' };
+      else result = deleteData(parseInt(data.sheetRow), token);
+    }
+    else if (action === 'uploadAttachment') {
+      if (!hasPermission(token, 'upload_attachment')) result = { success: false, message: 'ต้องเข้าสู่ระบบก่อนอัปโหลดรูป' };
+      else result = uploadAttachment(data);
+    }
+    else if (action === 'listAttachments')   result = listAttachments(data.recordId, token);
+    else if (action === 'getAttachmentData') result = getAttachmentData(data.attachmentId, token);
+    else if (action === 'deleteAttachment') {
+      if (!hasPermission(token, 'manage_attachments')) result = { success: false, message: 'ไม่มีสิทธิ์ลบไฟล์แนบ' };
+      else result = deleteAttachmentRecord(data.attachmentId, token);
+    }
+    else if (action === 'cleanupTestRecords')  result = cleanupTestRecords(data.recordIds || [], token);
+    else if (action === 'checkDuplicate')      result = checkDuplicate(data, token);
+    else if (action === 'checkDuplicatePublic') result = checkDuplicatePublic(data);
+    else if (action === 'listUsers')           result = listUsers(token);
+    else if (action === 'createUser')          result = createUser(data, token);
+    else if (action === 'updateUser')          result = updateUser(data, token);
+    else if (action === 'resetUserPassword')   result = resetUserPassword(data, token);
+    else if (action === 'initUserSystem')      result = initUserSystem();
     else if (action === 'initMetadataColumns') {
-      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initMetadataColumns();
     }
     else if (action === 'initAddressColumns') {
-      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initAddressColumns();
     }
     else if (action === 'initNewFormColumns') {
-      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initNewFormColumns();
     }
     else if (action === 'initRecordIdCounter') {
-      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initRecordIdCounter();
     }
     else if (action === 'findDuplicateRecordIds') {
-      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = findDuplicateRecordIds();
     }
     else if (action === 'listRecentRevisions') {
-      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      if (!validateSession(token)) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = listRecentRevisions();
     }
     else if (action === 'exportRevisionRows') {
-      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      if (!validateSession(token)) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = exportRevisionRows(data.revisionId || '', parseInt(data.minRecordId || '420'));
     }
     else result = { success: false, message: 'Unknown action: ' + action };
@@ -106,6 +140,34 @@ function makeResponse(data) {
 
 // ===== AUTHENTICATION =====
 
+function hashPassword(password, salt) {
+  var raw = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    salt + ':' + password,
+    Utilities.Charset.UTF_8
+  );
+  return raw.map(function(b) {
+    var hex = (b < 0 ? b + 256 : b).toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  }).join('');
+}
+
+function generateSalt() {
+  return Utilities.getUuid().replace(/-/g, '');
+}
+
+function getOrCreateUsersSheet() {
+  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(USERS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(USERS_SHEET_NAME);
+    var headers = ['UserID','Username','PasswordHash','Salt','DisplayName','Role','Active','LastLoginAt','CreatedAt','UpdatedAt'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
 function getAdminPassword() {
   try {
     var p = PropertiesService.getScriptProperties().getProperty('ADMIN_PASSWORD');
@@ -113,17 +175,59 @@ function getAdminPassword() {
   } catch(e) { return ADMIN_PASSWORD_DEFAULT; }
 }
 
+// New user-based login with username + hashed password
+function loginUser(username, password) {
+  if (!username || !password) return { success: false, message: 'ต้องระบุชื่อผู้ใช้และรหัสผ่าน' };
+  var sheet   = getOrCreateUsersSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { success: false, message: 'ยังไม่มีบัญชีผู้ใช้ในระบบ กรุณาติดต่อผู้ดูแลระบบ' };
+  var vals    = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  var userRow = null;
+  var rowIdx  = -1;
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][1]).toLowerCase() === String(username).toLowerCase()) {
+      userRow = vals[i]; rowIdx = i + 2; break;
+    }
+  }
+  if (!userRow) return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
+  if (!userRow[6]) return { success: false, message: 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ' };
+  var expectedHash = hashPassword(password, String(userRow[3]));
+  if (expectedHash !== String(userRow[2])) return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
+
+  var token   = Utilities.getUuid();
+  var session = { userId: String(userRow[0]), role: String(userRow[5]), displayName: String(userRow[4]) };
+  CacheService.getScriptCache().put('sess_' + token, JSON.stringify(session), SESSION_TTL_SECS);
+
+  var now = new Date().toISOString();
+  sheet.getRange(rowIdx, 8).setValue(now);
+  sheet.getRange(rowIdx, 10).setValue(now);
+
+  var dash = {};
+  if ((PERMISSIONS[session.role] || []).indexOf('view_dashboard') !== -1) {
+    dash = getDashboardDataInternal();
+  }
+  dash.success     = true;
+  dash.token       = token;
+  dash.expiresIn   = SESSION_TTL_SECS;
+  dash.user        = { userId: session.userId, role: session.role, displayName: session.displayName };
+  dash.permissions = PERMISSIONS[session.role] || [];
+  return dash;
+}
+
+// Legacy password-only login (kept for backward compatibility during transition)
 function loginAdmin(password) {
   if (password !== getAdminPassword()) {
     return { success: false, message: 'รหัสผ่านไม่ถูกต้อง!' };
   }
-  var token = Utilities.getUuid();
-  CacheService.getScriptCache().put('sess_' + token, '1', SESSION_TTL_SECS);
-  // Return dashboard data with token so the UI gets everything in one call
+  var token   = Utilities.getUuid();
+  var session = { userId: 'legacy', role: 'admin', displayName: 'Admin' };
+  CacheService.getScriptCache().put('sess_' + token, JSON.stringify(session), SESSION_TTL_SECS);
   var dash = getDashboardDataInternal();
-  dash.success  = true;
-  dash.token    = token;
-  dash.expiresIn = SESSION_TTL_SECS;
+  dash.success     = true;
+  dash.token       = token;
+  dash.expiresIn   = SESSION_TTL_SECS;
+  dash.user        = session;
+  dash.permissions = PERMISSIONS['admin'];
   return dash;
 }
 
@@ -134,11 +238,133 @@ function logoutAdmin(token) {
   return { success: true, message: 'ออกจากระบบแล้ว' };
 }
 
-function validateSession(token) {
-  if (!token) return false;
+// Returns {userId, role, displayName} or null
+function getSession(token) {
+  if (!token) return null;
   try {
-    return CacheService.getScriptCache().get('sess_' + token) === '1';
-  } catch(e) { return false; }
+    var raw = CacheService.getScriptCache().get('sess_' + token);
+    if (!raw) return null;
+    // Legacy '1' value from old loginAdmin (backward compat)
+    if (raw === '1') return { userId: 'legacy', role: 'admin', displayName: 'Admin' };
+    return JSON.parse(raw);
+  } catch(e) { return null; }
+}
+
+function validateSession(token) {
+  return getSession(token) !== null;
+}
+
+function hasPermission(token, permission) {
+  var session = getSession(token);
+  if (!session) return false;
+  var perms = PERMISSIONS[session.role] || [];
+  return perms.indexOf(permission) !== -1;
+}
+
+// ===== USER MANAGEMENT =====
+
+function listUsers(token) {
+  if (!hasPermission(token, 'manage_users')) return { success: false, message: 'ไม่มีสิทธิ์' };
+  var sheet = getOrCreateUsersSheet();
+  if (sheet.getLastRow() <= 1) return { success: true, users: [] };
+  var vals  = sheet.getRange(2, 1, sheet.getLastRow() - 1, 10).getValues();
+  var users = vals.map(function(r) {
+    return { userId: r[0], username: r[1], displayName: r[4], role: r[5], active: !!r[6], lastLoginAt: r[7], createdAt: r[8] };
+  });
+  return { success: true, users: users };
+}
+
+function createUser(data, token) {
+  if (!hasPermission(token, 'manage_users')) return { success: false, message: 'ไม่มีสิทธิ์' };
+  if (!data.username || !data.password || !data.role) return { success: false, message: 'ข้อมูลไม่ครบ: username, password, role' };
+  if (!PERMISSIONS[data.role]) return { success: false, message: 'role ไม่ถูกต้อง: ' + data.role };
+  var sheet   = getOrCreateUsersSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    var existing = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+    for (var i = 0; i < existing.length; i++) {
+      if (String(existing[i][0]).toLowerCase() === String(data.username).toLowerCase()) {
+        return { success: false, message: 'ชื่อผู้ใช้นี้มีอยู่แล้ว' };
+      }
+    }
+  }
+  var salt        = generateSalt();
+  var hash        = hashPassword(data.password, salt);
+  var userId      = 'USR-' + Date.now();
+  var now         = new Date().toISOString();
+  var displayName = data.displayName || data.username;
+  sheet.appendRow([userId, data.username, hash, salt, displayName, data.role, true, '', now, now]);
+  return { success: true, userId: userId, message: 'สร้างบัญชีผู้ใช้ "' + data.username + '" สำเร็จ' };
+}
+
+function updateUser(data, token) {
+  if (!hasPermission(token, 'manage_users')) return { success: false, message: 'ไม่มีสิทธิ์' };
+  if (!data.userId) return { success: false, message: 'ต้องระบุ userId' };
+  var sheet   = getOrCreateUsersSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { success: false, message: 'ไม่พบผู้ใช้' };
+  var vals = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]) === String(data.userId)) {
+      var rowNum = i + 2;
+      var now    = new Date().toISOString();
+      if (data.displayName !== undefined) sheet.getRange(rowNum, 5).setValue(data.displayName);
+      if (data.role !== undefined && PERMISSIONS[data.role]) sheet.getRange(rowNum, 6).setValue(data.role);
+      if (data.active !== undefined) sheet.getRange(rowNum, 7).setValue(!!data.active);
+      sheet.getRange(rowNum, 10).setValue(now);
+      return { success: true, message: 'อัปเดตผู้ใช้สำเร็จ' };
+    }
+  }
+  return { success: false, message: 'ไม่พบ userId: ' + data.userId };
+}
+
+function resetUserPassword(data, token) {
+  if (!hasPermission(token, 'manage_users')) return { success: false, message: 'ไม่มีสิทธิ์' };
+  if (!data.userId || !data.newPassword) return { success: false, message: 'ต้องระบุ userId และ newPassword' };
+  var sheet   = getOrCreateUsersSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { success: false, message: 'ไม่พบผู้ใช้' };
+  var vals = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]) === String(data.userId)) {
+      var rowNum = i + 2;
+      var salt   = generateSalt();
+      var hash   = hashPassword(data.newPassword, salt);
+      var now    = new Date().toISOString();
+      sheet.getRange(rowNum, 3).setValue(hash);
+      sheet.getRange(rowNum, 4).setValue(salt);
+      sheet.getRange(rowNum, 10).setValue(now);
+      return { success: true, message: 'รีเซ็ตรหัสผ่านสำเร็จ' };
+    }
+  }
+  return { success: false, message: 'ไม่พบ userId: ' + data.userId };
+}
+
+// Run once from GAS Editor after setting Script Properties:
+//   INITIAL_SUPERADMIN_USERNAME  and  INITIAL_SUPERADMIN_PASSWORD
+function initUserSystem() {
+  var props    = PropertiesService.getScriptProperties();
+  var username = props.getProperty('INITIAL_SUPERADMIN_USERNAME');
+  var password = props.getProperty('INITIAL_SUPERADMIN_PASSWORD');
+  if (!username || !password) {
+    return { success: false, message: 'กรุณาตั้งค่า Script Properties: INITIAL_SUPERADMIN_USERNAME และ INITIAL_SUPERADMIN_PASSWORD ก่อน' };
+  }
+  var sheet   = getOrCreateUsersSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    var existing = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+    for (var i = 0; i < existing.length; i++) {
+      if (String(existing[i][0]).toLowerCase() === String(username).toLowerCase()) {
+        return { success: false, message: 'ผู้ใช้ "' + username + '" มีอยู่แล้วในระบบ' };
+      }
+    }
+  }
+  var salt   = generateSalt();
+  var hash   = hashPassword(password, salt);
+  var userId = 'USR-SA-' + Date.now();
+  var now    = new Date().toISOString();
+  sheet.appendRow([userId, username, hash, salt, username, 'super_admin', true, '', now, now]);
+  return { success: true, userId: userId, message: 'สร้างบัญชี super_admin "' + username + '" สำเร็จ กรุณาล็อกอินได้เลย' };
 }
 
 // ===== DASHBOARD =====
@@ -273,7 +499,7 @@ function submitData(formObject) {
 }
 
 function updateData(sheetRowNum, formObject, token) {
-  if (!validateSession(token)) return { success: false, message: 'ไม่มีสิทธิ์แก้ไขข้อมูล!' };
+  if (!hasPermission(token, 'edit_record')) return { success: false, message: 'ไม่มีสิทธิ์แก้ไขข้อมูล!' };
   try {
     var sheet      = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
     var existingId = sheet.getRange(sheetRowNum, 1).getValue();
@@ -289,7 +515,7 @@ function updateData(sheetRowNum, formObject, token) {
 }
 
 function deleteData(sheetRowNum, token) {
-  if (!validateSession(token)) return { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูล!' };
+  if (!hasPermission(token, 'delete_record')) return { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูล!' };
   try {
     var sheet    = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
     var recId    = String(sheet.getRange(sheetRowNum, 1).getValue());

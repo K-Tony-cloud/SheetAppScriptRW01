@@ -135,12 +135,19 @@
   <!-- ===== NAVBAR ===== -->
   <nav class="navbar navbar-dark shadow-sm fixed-top">
     <div class="container">
-      <span class="navbar-brand mb-0 h1" onclick="showView('welcomeView')" style="cursor:pointer; transition: 0.2s;">
+      <span class="navbar-brand mb-0 h1" onclick="navBrandClick()" style="cursor:pointer; transition: 0.2s;">
         <i class="fas fa-shield-alt text-warning"></i> ระบบฐานข้อมูล สน.พระราชวัง
       </span>
-      <div class="d-flex gap-2">
+      <div class="d-flex gap-2 align-items-center">
+        <span id="navUserDisplay" class="d-none text-white-50 small me-1">
+          <i class="fas fa-user-circle"></i> <span id="navUserName"></span>
+          <span id="navRoleBadge" class="badge ms-1"></span>
+        </span>
         <button class="btn btn-outline-light btn-sm d-none" id="btnHome" onclick="showView('welcomeView')">
           <i class="fas fa-home"></i> หน้าแรก
+        </button>
+        <button class="btn btn-outline-warning btn-sm d-none" id="btnUserMgmt" onclick="showUserMgmt()">
+          <i class="fas fa-users-cog"></i> จัดการผู้ใช้
         </button>
         <button class="btn btn-outline-danger btn-sm d-none" id="btnLogout" onclick="logout()">
           <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
@@ -151,19 +158,48 @@
 
   <div class="container pb-5 mt-2">
 
+    <!-- ===== LOGIN VIEW ===== -->
+    <div id="loginView" class="d-none d-flex justify-content-center" style="padding-top: 40px;">
+      <div class="card shadow-lg border-0" style="width: 100%; max-width: 420px;">
+        <div class="card-header bg-dark text-white py-3">
+          <h5 class="mb-0 text-center"><i class="fas fa-shield-alt text-warning me-2"></i> เข้าสู่ระบบ</h5>
+          <p class="mb-0 text-center text-white-50 small mt-1">ระบบฐานข้อมูล สน.พระราชวัง</p>
+        </div>
+        <div class="card-body p-4">
+          <form onsubmit="event.preventDefault(); doLogin();">
+            <div class="mb-3">
+              <label class="form-label fw-bold">ชื่อผู้ใช้ <span class="text-danger">*</span></label>
+              <input type="text" id="loginUsername" class="form-control form-control-lg" autocomplete="username" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">รหัสผ่าน <span class="text-danger">*</span></label>
+              <input type="password" id="loginPassword" class="form-control form-control-lg" autocomplete="current-password" required>
+            </div>
+            <div id="loginViewError" class="alert alert-danger py-2 d-none small mb-2"></div>
+            <div id="loginViewSpinner" class="text-center text-muted my-2 d-none">
+              <i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบ...
+            </div>
+            <button type="submit" class="btn btn-primary btn-lg w-100 mt-1" id="loginViewBtn">
+              <i class="fas fa-sign-in-alt"></i> เข้าสู่ระบบ
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <!-- ===== WELCOME VIEW ===== -->
-    <div id="welcomeView" class="welcome-container">
+    <div id="welcomeView" class="welcome-container d-none">
       <i class="fas fa-landmark text-primary mb-3 icon-float" style="font-size: 5rem; text-shadow: 0 10px 20px rgba(13, 110, 253, 0.2);"></i>
       <h1 class="fw-bold mb-3 fade-up delay-1" style="color: #1a252f;">ระบบฐานข้อมูลผู้มาติดต่อ</h1>
       <p class="text-muted mb-5 fs-5 fade-up delay-2">สถานีตำรวจนครบาลพระราชวัง</p>
       <div class="row w-100 justify-content-center fade-up delay-3">
-        <div class="col-md-6 col-lg-4">
+        <div class="col-md-6 col-lg-4" id="btnFormWrapper">
           <button class="btn btn-primary btn-massive shadow" onclick="showView('formView')">
             <i class="fas fa-edit d-block mb-2 fs-2"></i> ลงข้อมูลเรื่องใหม่
           </button>
         </div>
-        <div class="col-md-6 col-lg-4">
-          <button class="btn btn-dark btn-massive shadow" data-bs-toggle="modal" data-bs-target="#loginModal">
+        <div class="col-md-6 col-lg-4" id="btnDashWrapper">
+          <button class="btn btn-dark btn-massive shadow" onclick="goToDashboard()">
             <i class="fas fa-chart-line d-block mb-2 fs-2"></i> Admin Dashboard
           </button>
         </div>
@@ -886,10 +922,10 @@
         </div>
         <div class="modal-body bg-light" id="detailModalBody"></div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-warning" onclick="openEditFromModal()">
+          <button type="button" class="btn btn-warning" id="detailEditBtn" onclick="openEditFromModal()">
             <i class="fas fa-edit"></i> แก้ไขข้อมูล
           </button>
-          <button type="button" class="btn btn-danger" onclick="openDeleteConfirm()">
+          <button type="button" class="btn btn-danger" id="detailDeleteBtn" onclick="openDeleteConfirm()">
             <i class="fas fa-trash-alt"></i> ลบข้อมูล
           </button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -900,31 +936,51 @@
     </div>
   </div>
 
-  <!-- ===== LOGIN MODAL ===== -->
-  <div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+  <!-- ===== USER MANAGEMENT MODAL ===== -->
+  <div class="modal fade" id="userMgmtModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content border-0 shadow-lg">
         <div class="modal-header bg-dark text-white">
-          <h5 class="modal-title"><i class="fas fa-lock"></i> ยืนยันตัวตน Admin</h5>
+          <h5 class="modal-title"><i class="fas fa-users-cog"></i> จัดการผู้ใช้งาน</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <form onsubmit="event.preventDefault(); verifyAdmin();">
-          <div class="modal-body text-center p-4">
-            <label class="form-label fw-bold">กรุณาใส่รหัสผ่านเพื่อเข้าสู่ระบบ</label>
-            <input type="password" id="adminPasswordInput" class="form-control form-control-lg text-center bg-light" placeholder="ใส่รหัสผ่านแล้วกด Enter" required>
-            <div id="loginError" class="text-danger mt-2 d-none fw-bold">
-              <i class="fas fa-exclamation-circle"></i> รหัสผ่านไม่ถูกต้อง!
-            </div>
-            <div id="loginSpinner" class="mt-2 d-none text-muted">
-              <i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบ...
+        <div class="modal-body p-3">
+          <!-- Create user form -->
+          <div class="card border mb-3">
+            <div class="card-header bg-light fw-bold"><i class="fas fa-user-plus text-primary me-1"></i> เพิ่มผู้ใช้ใหม่</div>
+            <div class="card-body">
+              <div class="row g-2">
+                <div class="col-md-3">
+                  <input type="text" id="um_username" class="form-control form-control-sm" placeholder="ชื่อผู้ใช้ *">
+                </div>
+                <div class="col-md-3">
+                  <input type="text" id="um_displayname" class="form-control form-control-sm" placeholder="ชื่อแสดง">
+                </div>
+                <div class="col-md-3">
+                  <input type="password" id="um_password" class="form-control form-control-sm" placeholder="รหัสผ่าน *">
+                </div>
+                <div class="col-md-2">
+                  <select id="um_role" class="form-select form-select-sm">
+                    <option value="viewer">ดูข้อมูล</option>
+                    <option value="report">รายงาน</option>
+                    <option value="operator" selected>เจ้าหน้าที่</option>
+                    <option value="admin">ผู้ดูแล</option>
+                    <option value="super_admin">ซุปเปอร์แอดมิน</option>
+                  </select>
+                </div>
+                <div class="col-md-1">
+                  <button class="btn btn-primary btn-sm w-100" onclick="umCreateUser()"><i class="fas fa-plus"></i></button>
+                </div>
+              </div>
+              <div id="umCreateError" class="text-danger small mt-1 d-none"></div>
             </div>
           </div>
-          <div class="modal-footer justify-content-center bg-light border-top-0">
-            <button type="submit" class="btn btn-primary px-4" id="loginBtn">
-              <i class="fas fa-sign-in-alt"></i> เข้าสู่ระบบ
-            </button>
-          </div>
-        </form>
+          <!-- User list -->
+          <div id="umUserList"><div class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</div></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times"></i> ปิด</button>
+        </div>
       </div>
     </div>
   </div>
@@ -958,19 +1014,44 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
   <script>
     // ==================== STATE ====================
-    let loginModal, detailModal, deleteConfirmModal, toastInstance;
-    let adminSession = null;        // stores admin password after login
-    let globalData   = [];          // [{ sheetRow: N, data: [...35 cols...] }, ...]
+    let detailModal, deleteConfirmModal, userMgmtModal, toastInstance;
+    let adminSession = null;        // stores session token after login
+    let currentUser  = null;        // {userId, role, displayName, permissions:[]}
+    let globalData   = [];
     let filteredData = [];
-    let currentViewItem = null;     // currently open detail record
-    let editSheetRow = null;        // null = create mode, number = edit mode
-    let currentEditRecordId = null; // RecordID string for current edit session
+    let currentViewItem = null;
+    let editSheetRow = null;
+    let currentEditRecordId = null;
     let sortCol = -1;
     let sortAsc = true;
     let activeCardFilter = 'all';
     let activeProvinceFilter = null;
     let activeTopicFilter = null;
     let activeReasonFilter = null;
+
+    const CLIENT_PERMISSIONS = {
+      viewer:      ['view_dashboard', 'view_records'],
+      report:      ['view_dashboard', 'view_records', 'export_records'],
+      operator:    ['view_dashboard', 'view_records', 'create_record', 'upload_attachment'],
+      admin:       ['view_dashboard', 'view_records', 'create_record', 'upload_attachment',
+                    'edit_record', 'delete_record', 'export_records', 'manage_attachments'],
+      super_admin: ['view_dashboard', 'view_records', 'create_record', 'upload_attachment',
+                    'edit_record', 'delete_record', 'export_records', 'manage_attachments',
+                    'manage_users', 'manage_system']
+    };
+    const ROLE_LABELS = {
+      viewer:      { label: 'ดูข้อมูล',        cls: 'bg-secondary' },
+      report:      { label: 'รายงาน',          cls: 'bg-info' },
+      operator:    { label: 'เจ้าหน้าที่',     cls: 'bg-primary' },
+      admin:       { label: 'ผู้ดูแล',          cls: 'bg-warning text-dark' },
+      super_admin: { label: 'ซุปเปอร์แอดมิน', cls: 'bg-danger' }
+    };
+
+    function hasClientPerm(perm) {
+      if (!currentUser) return false;
+      var perms = CLIENT_PERMISSIONS[currentUser.role] || [];
+      return perms.indexOf(perm) !== -1;
+    }
     const PROVINCES_STATIC = [{"id":1,"name":"กรุงเทพมหานคร"},{"id":2,"name":"สมุทรปราการ"},{"id":3,"name":"นนทบุรี"},{"id":4,"name":"ปทุมธานี"},{"id":5,"name":"พระนครศรีอยุธยา"},{"id":6,"name":"อ่างทอง"},{"id":7,"name":"ลพบุรี"},{"id":8,"name":"สิงห์บุรี"},{"id":9,"name":"ชัยนาท"},{"id":10,"name":"สระบุรี"},{"id":11,"name":"ชลบุรี"},{"id":12,"name":"ระยอง"},{"id":13,"name":"จันทบุรี"},{"id":14,"name":"ตราด"},{"id":15,"name":"ฉะเชิงเทรา"},{"id":16,"name":"ปราจีนบุรี"},{"id":17,"name":"นครนายก"},{"id":18,"name":"สระแก้ว"},{"id":19,"name":"นครราชสีมา"},{"id":20,"name":"บุรีรัมย์"},{"id":21,"name":"สุรินทร์"},{"id":22,"name":"ศรีสะเกษ"},{"id":23,"name":"อุบลราชธานี"},{"id":24,"name":"ยโสธร"},{"id":25,"name":"ชัยภูมิ"},{"id":26,"name":"อำนาจเจริญ"},{"id":27,"name":"หนองบัวลำภู"},{"id":28,"name":"ขอนแก่น"},{"id":29,"name":"อุดรธานี"},{"id":30,"name":"เลย"},{"id":31,"name":"หนองคาย"},{"id":32,"name":"มหาสารคาม"},{"id":33,"name":"ร้อยเอ็ด"},{"id":34,"name":"กาฬสินธุ์"},{"id":35,"name":"สกลนคร"},{"id":36,"name":"นครพนม"},{"id":37,"name":"มุกดาหาร"},{"id":38,"name":"เชียงใหม่"},{"id":39,"name":"ลำพูน"},{"id":40,"name":"ลำปาง"},{"id":41,"name":"อุตรดิตถ์"},{"id":42,"name":"แพร่"},{"id":43,"name":"น่าน"},{"id":44,"name":"พะเยา"},{"id":45,"name":"เชียงราย"},{"id":46,"name":"แม่ฮ่องสอน"},{"id":47,"name":"นครสวรรค์"},{"id":48,"name":"อุทัยธานี"},{"id":49,"name":"กำแพงเพชร"},{"id":50,"name":"ตาก"},{"id":51,"name":"สุโขทัย"},{"id":52,"name":"พิษณุโลก"},{"id":53,"name":"พิจิตร"},{"id":54,"name":"เพชรบูรณ์"},{"id":55,"name":"ราชบุรี"},{"id":56,"name":"กาญจนบุรี"},{"id":57,"name":"สุพรรณบุรี"},{"id":58,"name":"นครปฐม"},{"id":59,"name":"สมุทรสาคร"},{"id":60,"name":"สมุทรสงคราม"},{"id":61,"name":"เพชรบุรี"},{"id":62,"name":"ประจวบคีรีขันธ์"},{"id":63,"name":"นครศรีธรรมราช"},{"id":64,"name":"กระบี่"},{"id":65,"name":"พังงา"},{"id":66,"name":"ภูเก็ต"},{"id":67,"name":"สุราษฎร์ธานี"},{"id":68,"name":"ระนอง"},{"id":69,"name":"ชุมพร"},{"id":70,"name":"สงขลา"},{"id":71,"name":"สตูล"},{"id":72,"name":"ตรัง"},{"id":73,"name":"พัทลุง"},{"id":74,"name":"ปัตตานี"},{"id":75,"name":"ยะลา"},{"id":76,"name":"นราธิวาส"},{"id":77,"name":"บึงกาฬ"}];
     let provincesData = null;
     let provinceNameToId = {};
@@ -989,18 +1070,48 @@
 
     // ==================== INIT ====================
     document.addEventListener("DOMContentLoaded", function() {
-      loginModal       = new bootstrap.Modal(document.getElementById('loginModal'));
-      detailModal      = new bootstrap.Modal(document.getElementById('detailModal'));
+      detailModal        = new bootstrap.Modal(document.getElementById('detailModal'));
       deleteConfirmModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+      userMgmtModal      = new bootstrap.Modal(document.getElementById('userMgmtModal'));
 
-      document.getElementById('loginModal').addEventListener('shown.bs.modal', function() {
-        document.getElementById('adminPasswordInput').focus();
-      });
+      // Restore session from sessionStorage
+      try {
+        const savedToken = sessionStorage.getItem('rw01_token');
+        const savedUser  = sessionStorage.getItem('rw01_user');
+        const savedPerms = sessionStorage.getItem('rw01_perms');
+        if (savedToken && savedUser) {
+          const parsedUser  = JSON.parse(savedUser);
+          const parsedPerms = savedPerms ? JSON.parse(savedPerms) : [];
+          gasPost({ action: 'dashboard', token: savedToken })
+            .then(function(data) {
+              if (data.success && data.allData) {
+                adminSession = savedToken;
+                currentUser  = parsedUser;
+                currentUser.permissions = parsedPerms;
+                globalData   = data.allData;
+                filteredData = [...globalData];
+                populateYearDropdown();
+                applyFilters();
+                updateNavUserDisplay();
+                applyRoleUI();
+                showView('welcomeView');
+              } else {
+                clearSession();
+                showView('loginView');
+              }
+            })
+            .catch(function() { showView('loginView'); });
+        } else {
+          showView('loginView');
+        }
+      } catch(e) {
+        showView('loginView');
+      }
     });
 
     // ==================== NAVIGATION ====================
     function showView(viewId) {
-      ['welcomeView', 'dashboardView', 'formView'].forEach(id => {
+      ['loginView', 'welcomeView', 'dashboardView', 'formView'].forEach(id => {
         document.getElementById(id).classList.add('d-none');
       });
       document.getElementById(viewId).classList.remove('d-none');
@@ -1009,9 +1120,17 @@
       const btnHome   = document.getElementById('btnHome');
       const btnLogout = document.getElementById('btnLogout');
 
-      if (viewId === 'welcomeView') {
+      if (viewId === 'loginView') {
         btnHome.classList.add('d-none');
         btnLogout.classList.add('d-none');
+        updateNavUserDisplay();
+        setTimeout(function() {
+          const u = document.getElementById('loginUsername');
+          if (u) u.focus();
+        }, 100);
+      } else if (viewId === 'welcomeView') {
+        btnHome.classList.add('d-none');
+        if (adminSession) btnLogout.classList.remove('d-none');
         resetFormMode();
       } else {
         btnHome.classList.remove('d-none');
@@ -1020,18 +1139,65 @@
       if (viewId === 'formView') loadProvinces();
     }
 
-    function logout() {
+    function navBrandClick() {
+      if (adminSession) showView('welcomeView'); else showView('loginView');
+    }
+
+    function goToDashboard() {
+      if (!adminSession || !hasClientPerm('view_dashboard')) { showView('loginView'); return; }
+      refreshDashboard();
+    }
+
+    function clearSession() {
       adminSession = null;
-      globalData = [];
-      filteredData = [];
-      sortCol = -1;
-      sortAsc = true;
+      currentUser  = null;
+      globalData = []; filteredData = [];
+      sortCol = -1; sortAsc = true;
       activeCardFilter = 'all';
-      activeProvinceFilter = null;
-      activeTopicFilter = null;
-      activeReasonFilter = null;
-      showView('welcomeView');
+      activeProvinceFilter = null; activeTopicFilter = null; activeReasonFilter = null;
+      try {
+        sessionStorage.removeItem('rw01_token');
+        sessionStorage.removeItem('rw01_user');
+        sessionStorage.removeItem('rw01_perms');
+      } catch(e) {}
+    }
+
+    function logout() {
+      if (adminSession) gasPost({ action: 'logout', token: adminSession }).catch(function() {});
+      clearSession();
+      updateNavUserDisplay();
+      applyRoleUI();
+      showView('loginView');
       showToast('ออกจากระบบเรียบร้อยแล้ว', 'secondary');
+    }
+
+    function updateNavUserDisplay() {
+      const navDisp = document.getElementById('navUserDisplay');
+      const btnUM   = document.getElementById('btnUserMgmt');
+      if (!currentUser) {
+        navDisp.classList.add('d-none');
+        btnUM.classList.add('d-none');
+        return;
+      }
+      navDisp.classList.remove('d-none');
+      document.getElementById('navUserName').textContent = currentUser.displayName;
+      const ri = ROLE_LABELS[currentUser.role] || { label: currentUser.role, cls: 'bg-secondary' };
+      const badge = document.getElementById('navRoleBadge');
+      badge.className = 'badge ms-1 ' + ri.cls;
+      badge.textContent = ri.label;
+      if (hasClientPerm('manage_users')) btnUM.classList.remove('d-none');
+      else btnUM.classList.add('d-none');
+    }
+
+    function applyRoleUI() {
+      const fw = document.getElementById('btnFormWrapper');
+      const dw = document.getElementById('btnDashWrapper');
+      if (fw) fw.classList.toggle('d-none', !hasClientPerm('create_record'));
+      if (dw) dw.classList.toggle('d-none', !hasClientPerm('view_dashboard'));
+      const editBtn = document.getElementById('detailEditBtn');
+      const delBtn  = document.getElementById('detailDeleteBtn');
+      if (editBtn) editBtn.classList.toggle('d-none', !hasClientPerm('edit_record'));
+      if (delBtn)  delBtn.classList.toggle('d-none', !hasClientPerm('delete_record'));
     }
 
     // ==================== TOAST ====================
@@ -1045,51 +1211,64 @@
       toastInstance.show();
     }
 
-    // ==================== ADMIN LOGIN ====================
-    function verifyAdmin() {
-      const pwd = document.getElementById('adminPasswordInput').value;
-      const errorEl   = document.getElementById('loginError');
-      const spinnerEl = document.getElementById('loginSpinner');
-      const btnEl     = document.getElementById('loginBtn');
+    // ==================== LOGIN ====================
+    function doLogin() {
+      const username = (document.getElementById('loginUsername').value || '').trim();
+      const password = document.getElementById('loginPassword').value || '';
+      const errorEl  = document.getElementById('loginViewError');
+      const spinner  = document.getElementById('loginViewSpinner');
+      const btn      = document.getElementById('loginViewBtn');
 
       errorEl.classList.add('d-none');
-      spinnerEl.classList.remove('d-none');
-      btnEl.disabled = true;
+      spinner.classList.remove('d-none');
+      btn.disabled = true;
 
-      gasGet({ action: 'dashboard', password: pwd })
+      gasPost({ action: 'loginUser', username: username, password: password })
         .then(function(data) {
-          spinnerEl.classList.add('d-none');
-          btnEl.disabled = false;
-          if (data.error) {
+          spinner.classList.add('d-none');
+          btn.disabled = false;
+          if (!data.success) {
             errorEl.classList.remove('d-none');
-            errorEl.textContent = data.error;
+            errorEl.textContent = data.message || 'เข้าสู่ระบบไม่สำเร็จ';
             return;
           }
-          errorEl.classList.add('d-none');
-          loginModal.hide();
-          document.getElementById('adminPasswordInput').value = '';
-
-          adminSession = pwd;
-          globalData   = data.allData;
-          filteredData = [...globalData];
-
-          populateYearDropdown();
-          applyFilters();
-          showView('dashboardView');
+          applyLoginResult(data);
         })
         .catch(function() {
-          spinnerEl.classList.add('d-none');
-          btnEl.disabled = false;
+          spinner.classList.add('d-none');
+          btn.disabled = false;
           errorEl.classList.remove('d-none');
-          errorEl.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
+          errorEl.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่';
         });
+    }
+
+    function applyLoginResult(data) {
+      adminSession = data.token;
+      currentUser  = data.user;
+      currentUser.permissions = data.permissions || [];
+      try {
+        sessionStorage.setItem('rw01_token', data.token);
+        sessionStorage.setItem('rw01_user',  JSON.stringify(data.user));
+        sessionStorage.setItem('rw01_perms', JSON.stringify(data.permissions || []));
+      } catch(e) {}
+      globalData   = data.allData || [];
+      filteredData = [...globalData];
+      document.getElementById('loginUsername').value = '';
+      document.getElementById('loginPassword').value = '';
+      if (globalData.length) { populateYearDropdown(); applyFilters(); }
+      updateNavUserDisplay();
+      applyRoleUI();
+      showView('welcomeView');
     }
 
     // ==================== DASHBOARD HELPERS ====================
     function refreshDashboard() {
-      gasGet({ action: 'dashboard', password: adminSession })
+      gasPost({ action: 'dashboard', token: adminSession })
         .then(function(data) {
-          if (data.error) { showToast('ไม่สามารถโหลดข้อมูลได้: ' + data.error, 'danger'); return; }
+          if (!data.success) {
+            if (data.message && data.message.indexOf('หมดอายุ') !== -1) { logout(); return; }
+            showToast('ไม่สามารถโหลดข้อมูลได้: ' + data.message, 'danger'); return;
+          }
           globalData   = data.allData;
           filteredData = [...globalData];
           populateYearDropdown();
@@ -1735,7 +1914,7 @@
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังลบ...';
 
-      gasPost({ action: 'delete', sheetRow: currentViewItem.sheetRow, password: adminSession })
+      gasPost({ action: 'delete', sheetRow: currentViewItem.sheetRow, token: adminSession })
         .then(function(response) {
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-trash-alt"></i> ยืนยันการลบ';
@@ -1818,10 +1997,10 @@
       };
 
       if (isEdit) {
-        gasPost(Object.assign({ action: 'update', sheetRow: editSheetRow, password: adminSession }, formObject))
+        gasPost(Object.assign({ action: 'update', sheetRow: editSheetRow, token: adminSession }, formObject))
           .then(onSuccess).catch(onFailure);
       } else {
-        gasPost(Object.assign({ action: 'submit' }, formObject))
+        gasPost(Object.assign({ action: 'submit', token: adminSession }, formObject))
           .then(onSuccess).catch(onFailure);
       }
     }
@@ -2166,6 +2345,7 @@
             const base64 = item.previewUrl.split(',')[1];
             const res = await gasPost({
               action: 'uploadAttachment',
+              token: adminSession,
               recordId: recordId,
               section: section,
               fileData: base64,
@@ -2197,6 +2377,91 @@
         });
         renderAllUploadZones();
       } catch(e) { console.error('upLoadExisting failed:', e); }
+    }
+
+    // ==================== USER MANAGEMENT ====================
+    function showUserMgmt() {
+      if (!hasClientPerm('manage_users')) return;
+      userMgmtModal.show();
+      umLoadUsers();
+    }
+
+    function umLoadUsers() {
+      const listEl = document.getElementById('umUserList');
+      listEl.innerHTML = '<div class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</div>';
+      gasPost({ action: 'listUsers', token: adminSession })
+        .then(function(data) {
+          if (!data.success) { listEl.innerHTML = '<div class="text-danger p-2">' + data.message + '</div>'; return; }
+          if (!data.users || !data.users.length) { listEl.innerHTML = '<div class="text-muted p-2 text-center">ยังไม่มีผู้ใช้งาน</div>'; return; }
+          var rows = data.users.map(function(u) {
+            const ri = ROLE_LABELS[u.role] || { label: u.role, cls: 'bg-secondary' };
+            const activeToggle = u.active
+              ? '<button class="btn btn-outline-warning btn-sm py-0" onclick="umToggleActive(\'' + u.userId + '\', false)"><i class="fas fa-ban"></i> ระงับ</button>'
+              : '<button class="btn btn-outline-success btn-sm py-0" onclick="umToggleActive(\'' + u.userId + '\', true)"><i class="fas fa-check"></i> เปิดใช้</button>';
+            const resetBtn = '<button class="btn btn-outline-secondary btn-sm py-0" onclick="umPromptReset(\'' + u.userId + '\', \'' + u.username + '\')"><i class="fas fa-key"></i></button>';
+            return '<tr class="' + (u.active ? '' : 'table-secondary text-muted') + '">'
+              + '<td class="small">' + (u.displayName || u.username) + '</td>'
+              + '<td class="small text-muted">' + u.username + '</td>'
+              + '<td><span class="badge ' + ri.cls + '">' + ri.label + '</span></td>'
+              + '<td class="small">'
+              +   '<select class="form-select form-select-sm py-0" style="min-width:110px" onchange="umChangeRole(\'' + u.userId + '\', this.value)">'
+              +   ['viewer','report','operator','admin','super_admin'].map(function(r) {
+                    return '<option value="' + r + '"' + (r === u.role ? ' selected' : '') + '>' + (ROLE_LABELS[r] ? ROLE_LABELS[r].label : r) + '</option>';
+                  }).join('')
+              +   '</select>'
+              + '</td>'
+              + '<td class="text-nowrap">' + activeToggle + ' ' + resetBtn + '</td>'
+              + '</tr>';
+          });
+          listEl.innerHTML = '<table class="table table-sm table-bordered mb-0">'
+            + '<thead class="table-light"><tr><th>ชื่อแสดง</th><th>Username</th><th>สิทธิ์</th><th>เปลี่ยนสิทธิ์</th><th>จัดการ</th></tr></thead>'
+            + '<tbody>' + rows.join('') + '</tbody></table>';
+        })
+        .catch(function() { listEl.innerHTML = '<div class="text-danger p-2">เชื่อมต่อไม่ได้</div>'; });
+    }
+
+    function umCreateUser() {
+      const username    = (document.getElementById('um_username').value || '').trim();
+      const displayName = (document.getElementById('um_displayname').value || '').trim();
+      const password    = document.getElementById('um_password').value || '';
+      const role        = document.getElementById('um_role').value;
+      const errEl       = document.getElementById('umCreateError');
+      errEl.classList.add('d-none');
+      if (!username || !password) { errEl.classList.remove('d-none'); errEl.textContent = 'ต้องกรอกชื่อผู้ใช้และรหัสผ่าน'; return; }
+      gasPost({ action: 'createUser', token: adminSession, username: username, displayName: displayName, password: password, role: role })
+        .then(function(data) {
+          if (!data.success) { errEl.classList.remove('d-none'); errEl.textContent = data.message; return; }
+          showToast(data.message, 'success');
+          document.getElementById('um_username').value = '';
+          document.getElementById('um_displayname').value = '';
+          document.getElementById('um_password').value = '';
+          umLoadUsers();
+        })
+        .catch(function() { errEl.classList.remove('d-none'); errEl.textContent = 'เชื่อมต่อไม่ได้'; });
+    }
+
+    function umChangeRole(userId, newRole) {
+      gasPost({ action: 'updateUser', token: adminSession, userId: userId, role: newRole })
+        .then(function(data) {
+          showToast(data.success ? 'เปลี่ยนสิทธิ์สำเร็จ' : data.message, data.success ? 'success' : 'danger');
+          if (data.success) umLoadUsers();
+        }).catch(function() { showToast('เชื่อมต่อไม่ได้', 'danger'); });
+    }
+
+    function umToggleActive(userId, active) {
+      gasPost({ action: 'updateUser', token: adminSession, userId: userId, active: active })
+        .then(function(data) {
+          showToast(data.success ? (active ? 'เปิดใช้งานสำเร็จ' : 'ระงับบัญชีสำเร็จ') : data.message, data.success ? 'success' : 'danger');
+          if (data.success) umLoadUsers();
+        }).catch(function() { showToast('เชื่อมต่อไม่ได้', 'danger'); });
+    }
+
+    function umPromptReset(userId, username) {
+      const newPwd = prompt('รีเซ็ตรหัสผ่านสำหรับ "' + username + '"\nกรอกรหัสผ่านใหม่:');
+      if (!newPwd) return;
+      gasPost({ action: 'resetUserPassword', token: adminSession, userId: userId, newPassword: newPwd })
+        .then(function(data) { showToast(data.success ? 'รีเซ็ตรหัสผ่านสำเร็จ' : data.message, data.success ? 'success' : 'danger'); })
+        .catch(function() { showToast('เชื่อมต่อไม่ได้', 'danger'); });
     }
 
     // ==================== UTILITIES ====================
