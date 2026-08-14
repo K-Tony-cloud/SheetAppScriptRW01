@@ -90,6 +90,7 @@ function doPost(e) {
       else result = deleteAttachmentRecord(data.attachmentId, token);
     }
     else if (action === 'cleanupTestRecords')  result = cleanupTestRecords(data.recordIds || [], token);
+    else if (action === 'listExportAttachments') result = listExportAttachments(data, token);
     else if (action === 'checkDuplicate')      result = checkDuplicate(data, token);
     else if (action === 'checkDuplicatePublic') result = checkDuplicatePublic(data);
     else if (action === 'listUsers')           result = listUsers(token);
@@ -802,6 +803,36 @@ function deleteAttachmentRecord(attachmentId, token) {
     }
   }
   return { success: false, message: 'ไม่พบ attachmentId: ' + attachmentId };
+}
+
+// ===== PDF EXPORT ATTACHMENT LOADER =====
+
+function listExportAttachments(data, token) {
+  if (!hasPermission(token, 'export_records')) {
+    return { success: false, message: 'ไม่มีสิทธิ์ export PDF' };
+  }
+  var recordId = String(data.recordId || '');
+  if (!recordId) return { success: false, message: 'ต้องระบุ recordId' };
+  var attSheet = getOrCreateAttachmentsSheet();
+  var result   = {};
+  if (attSheet.getLastRow() <= 1) return { success: true, attachments: {} };
+  var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues();
+  vals.forEach(function(r) {
+    if (String(r[1]) !== recordId) return;
+    if (String(r[8]) === 'deleted') return;
+    var section = String(r[2]);
+    if (!result[section]) result[section] = [];
+    try {
+      var file  = DriveApp.getFileById(String(r[3]));
+      var bytes = file.getBlob().getBytes();
+      result[section].push({
+        fileName: String(r[4]),
+        mimeType: String(r[5]),
+        base64:   Utilities.base64Encode(bytes)
+      });
+    } catch(e) { /* skip inaccessible files */ }
+  });
+  return { success: true, attachments: result };
 }
 
 // ===== TEST RECORD CLEANUP (cascade) =====

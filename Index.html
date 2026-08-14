@@ -950,6 +950,9 @@
           <button type="button" class="btn btn-danger" id="detailDeleteBtn" onclick="openDeleteConfirm()">
             <i class="fas fa-trash-alt"></i> ลบข้อมูล
           </button>
+          <button type="button" class="btn btn-success d-none" id="detailPdfBtn" onclick="exportIndividualPdf()">
+            <i class="fas fa-file-pdf"></i> PDF
+          </button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
             <i class="fas fa-times"></i> ปิด
           </button>
@@ -1223,8 +1226,10 @@
       if (dw) dw.classList.toggle('d-none', !hasClientPerm('view_dashboard'));
       const editBtn = document.getElementById('detailEditBtn');
       const delBtn  = document.getElementById('detailDeleteBtn');
+      const pdfBtn  = document.getElementById('detailPdfBtn');
       if (editBtn) editBtn.classList.toggle('d-none', !hasClientPerm('edit_record'));
       if (delBtn)  delBtn.classList.toggle('d-none', !hasClientPerm('delete_record'));
+      if (pdfBtn)  pdfBtn.classList.toggle('d-none', !hasClientPerm('export_records'));
     }
 
     // ==================== TOAST ====================
@@ -2610,6 +2615,304 @@
       if (type === 'phone'  && /^[1-9]\d{7,8}$/.test(str)) return '0' + str;
       if (type === 'idcard' && /^[1-9]\d{11}$/.test(str))  return '0' + str;
       return str || '-';
+    }
+
+    // ==================== PDF INDIVIDUAL EXPORT ====================
+
+    async function exportIndividualPdf() {
+      if (!hasClientPerm('export_records')) { showToast('ไม่มีสิทธิ์ออก PDF', 'danger'); return; }
+      const item     = currentViewItem;
+      if (!item) { showToast('ไม่พบข้อมูล', 'danger'); return; }
+      const recordId = String(item.data[0] || '');
+      const pdfBtn   = document.getElementById('detailPdfBtn');
+      if (pdfBtn) { pdfBtn.disabled = true; pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังโหลด...'; }
+      try {
+        const res = await gasPost({ action: 'listExportAttachments', token: adminSession, recordId });
+        if (!res.success) { showToast(res.message || 'โหลดรูปไม่สำเร็จ', 'danger'); return; }
+        openPdfWindow(item, res.attachments || {});
+      } catch(e) {
+        showToast('เกิดข้อผิดพลาด: ' + e, 'danger');
+      } finally {
+        if (pdfBtn) { pdfBtn.disabled = false; pdfBtn.innerHTML = '<i class="fas fa-file-pdf"></i> PDF'; }
+      }
+    }
+
+    function openPdfWindow(item, atts) {
+      const html = buildPdfHtml(item.data, atts, item.seqNo, String(item.data[0] || ''));
+      const win  = window.open('', '_blank');
+      if (!win) { showToast('กรุณาอนุญาต Popup เพื่อพิมพ์ PDF', 'warning'); return; }
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.onload = function() { setTimeout(function() { win.print(); }, 800); };
+    }
+
+    function buildPdfHtml(d, atts, seqNo, recordId) {
+      const v = function(idx) { return (d[idx] || '').toString().trim(); };
+      const vd = function(idx) { return v(idx) || '-'; };
+
+      function imgs(sectionKey) {
+        var list = atts[sectionKey] || [];
+        if (!list.length) return '<span class="no-data">ไม่มีรูปภาพ</span>';
+        return '<div class="img-row">' + list.map(function(f) {
+          return '<img src="data:' + f.mimeType + ';base64,' + f.base64 + '" class="pdf-img">';
+        }).join('') + '</div>';
+      }
+
+      function addrBlock8(baseIdx, labels) {
+        // baseIdx: 0-based start index of 8-field address block
+        // fields: houseNo, moo, alley, road, tambon, amphure, province, postcode
+        var parts = [
+          v(baseIdx), v(baseIdx+1), v(baseIdx+2), v(baseIdx+3),
+          v(baseIdx+4), v(baseIdx+5), v(baseIdx+6), v(baseIdx+7)
+        ];
+        var hasData = parts.some(function(p) { return p !== ''; });
+        if (!hasData) return '<span class="no-data">-</span>';
+        var labels2 = labels || ['บ้านเลขที่','หมู่','ซอย','ถนน','ตำบล','อำเภอ','จังหวัด','รหัสไปรษณีย์'];
+        return parts.map(function(p, i) {
+          return p ? '<span class="addr-label">' + labels2[i] + '</span> ' + p : '';
+        }).filter(Boolean).join('  ');
+      }
+
+      function sourceBlock(basePersonIdx, baseOnlineIdx, otherIdx, sourceTypeIdx) {
+        var type = v(sourceTypeIdx);
+        var out  = '';
+        if (type === 'บุคคล' || type === 'person') {
+          var pf = [v(basePersonIdx), v(basePersonIdx+1), v(basePersonIdx+2),
+                    v(basePersonIdx+3), v(basePersonIdx+4), v(basePersonIdx+5),
+                    v(basePersonIdx+6), v(basePersonIdx+7)];
+          out = '<div class="sub-row"><b>ประเภท:</b> บุคคล</div>' +
+                '<div class="sub-row"><b>ชื่อ-สกุล:</b> ' + (pf[0]+' '+pf[1]).trim() + '</div>' +
+                '<div class="sub-row"><b>อายุ:</b> ' + (pf[2]||'-') + '  <b>บัตรปชช.:</b> ' + (pf[3]||'-') + '  <b>โทร:</b> ' + (pf[4]||'-') + '</div>' +
+                '<div class="sub-row"><b>ความสัมพันธ์:</b> ' + (pf[5]||'-') + '</div>' +
+                '<div class="sub-row"><b>ที่อยู่:</b> ' + (pf[6]||'-') + ' ' + (pf[7]||'') + '</div>';
+        } else if (type === 'ออนไลน์' || type === 'online') {
+          var of2 = [v(baseOnlineIdx), v(baseOnlineIdx+1), v(baseOnlineIdx+2),
+                     v(baseOnlineIdx+3), v(baseOnlineIdx+4), v(baseOnlineIdx+5)];
+          out = '<div class="sub-row"><b>ประเภท:</b> ออนไลน์</div>' +
+                '<div class="sub-row"><b>Platform:</b> ' + (of2[0]||'-') + '  <b>ชื่อบัญชี:</b> ' + (of2[1]||'-') + '</div>' +
+                '<div class="sub-row"><b>Link:</b> ' + (of2[2]||'-') + '</div>' +
+                '<div class="sub-row"><b>ลักษณะโพสต์:</b> ' + (of2[3]||'-') + '</div>' +
+                '<div class="sub-row"><b>วันที่โพสต์:</b> ' + (of2[4]||'-') + '  <b>หมายเหตุ:</b> ' + (of2[5]||'-') + '</div>';
+        } else if (v(otherIdx)) {
+          out = '<div class="sub-row"><b>ประเภท:</b> อื่นๆ  ' + v(otherIdx) + '</div>';
+        } else {
+          out = '<span class="no-data">-</span>';
+        }
+        return out;
+      }
+
+      // ---- legacy check (old records may lack cols 44+) ----
+      var isLegacy = !v(43) && !v(44) && !v(45);
+
+      var css = `
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Sarabun',sans-serif;font-size:11pt;color:#111;background:#fff}
+        @page{size:A4;margin:18mm 15mm 18mm 15mm}
+        @media print{body{margin:0}.no-print{display:none!important}.page-break{page-break-before:always}}
+        .pdf-wrap{width:100%;max-width:210mm;margin:0 auto;padding:6mm 0}
+        .pdf-header{text-align:center;border-bottom:2px solid #1a237e;padding-bottom:6px;margin-bottom:12px}
+        .pdf-header h2{font-size:15pt;font-weight:700;color:#1a237e}
+        .pdf-header .sub{font-size:10pt;color:#555;margin-top:2px}
+        .section{border:1px solid #bbb;border-radius:4px;margin-bottom:10px;page-break-inside:avoid}
+        .section-title{background:#1a237e;color:#fff;font-size:11pt;font-weight:700;padding:5px 10px;border-radius:3px 3px 0 0}
+        .section-body{padding:8px 12px}
+        .field-row{display:flex;flex-wrap:wrap;gap:4px 16px;margin-bottom:4px;align-items:baseline}
+        .field-label{font-weight:600;color:#333;white-space:nowrap;font-size:10pt}
+        .field-val{flex:1;min-width:120px;font-size:10.5pt}
+        .sub-row{margin-bottom:3px;font-size:10.5pt}
+        .addr-label{font-weight:600;color:#444;font-size:10pt}
+        .img-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+        .pdf-img{max-width:160px;max-height:160px;border:1px solid #ccc;border-radius:3px;object-fit:contain}
+        .no-data{color:#999;font-size:10pt}
+        .badge-notice{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10pt;font-weight:700}
+        .badge-has{background:#fff3cd;color:#856404}
+        .badge-none{background:#d1ecf1;color:#0c5460}
+        .meta-bar{font-size:9pt;color:#666;text-align:right;margin-bottom:8px}
+        hr.thin{border:none;border-top:1px solid #ddd;margin:6px 0}
+      `;
+
+      var noticeBadge = '';
+      var noticeVal   = v(41);
+      if (noticeVal === 'มีหมายเสด็จ') noticeBadge = '<span class="badge-notice badge-has">มีหมายเสด็จ</span>';
+      else if (noticeVal === 'ไม่มีหมายเสด็จ') noticeBadge = '<span class="badge-notice badge-none">ไม่มีหมายเสด็จ</span>';
+
+      var sec1 = `<div class="section">
+        <div class="section-title">ส่วนที่ 1 — วันเวลาบันทึก & หมาย</div>
+        <div class="section-body">
+          <div class="field-row"><span class="field-label">วันที่บันทึก:</span><span class="field-val">${vd(1)}</span>
+            <span class="field-label">เวลา:</span><span class="field-val">${vd(2)}</span></div>
+          <div class="field-row"><span class="field-label">สถานะหมาย:</span><span class="field-val">${noticeBadge || vd(41)}</span></div>
+          ${v(42) ? '<div class="field-row"><span class="field-label">รายละเอียดหมาย:</span><span class="field-val">' + v(42) + '</span></div>' : ''}
+        </div></div>`;
+
+      var sec2 = `<div class="section">
+        <div class="section-title">ส่วนที่ 2 — สถานที่ที่พบ & เจ้าหน้าที่</div>
+        <div class="section-body">
+          <div class="field-row"><span class="field-label">ประเภทสถานที่พบ:</span><span class="field-val">${vd(43)}</span></div>
+          ${v(44) ? '<div class="field-row"><span class="field-label">รายละเอียดสถานที่:</span><span class="field-val">' + v(44) + '</span></div>' : ''}
+          <div class="field-row"><span class="field-label">วันที่พบ:</span><span class="field-val">${vd(45)}</span>
+            <span class="field-label">เวลาที่พบ:</span><span class="field-val">${vd(46)}</span></div>
+          <hr class="thin">
+          <div class="field-row"><span class="field-label">ยศ:</span><span class="field-val">${vd(47)}</span>
+            <span class="field-label">ชื่อเจ้าหน้าที่:</span><span class="field-val">${vd(48)}</span>
+            <span class="field-label">โทร:</span><span class="field-val">${vd(49)}</span></div>
+          ${v(93) ? '<div class="field-row"><span class="field-label">ตำแหน่ง:</span><span class="field-val">' + v(93) + '</span></div>' : ''}
+          <hr class="thin"><b>รูปเจ้าหน้าที่ที่พบ:</b><br>${imgs('officer_found')}
+        </div></div>`;
+
+      var sec3Items = '';
+      if (isLegacy) {
+        sec3Items = `<div class="field-row"><span class="field-label">วันส่งมอบ:</span><span class="field-val">${vd(50)}</span>
+          <span class="field-label">เวลา:</span><span class="field-val">${vd(51)}</span></div>
+          <div class="field-row"><span class="field-label">ลักษณะซอง:</span><span class="field-val">${vd(57)}</span></div>
+          <div class="field-row"><span class="field-label">สีซอง:</span><span class="field-val">${vd(59)}</span></div>`;
+      } else {
+        sec3Items = `<div class="field-row"><span class="field-label">การมองเห็น:</span><span class="field-val">${vd(52)}</span></div>
+          ${v(53) ? '<div class="field-row"><span class="field-label">รายละเอียดการซ่อน:</span><span class="field-val">' + v(53) + '</span></div>' : ''}
+          <div class="field-row"><span class="field-label">วิธีพกพา:</span><span class="field-val">${vd(54)}</span>
+          ${v(94) ? '  <span class="field-label">อื่นๆ:</span><span class="field-val">' + v(94) + '</span>' : ''}</div>
+          <div class="field-row"><span class="field-label">ประเภทภาชนะ:</span><span class="field-val">${vd(55)}</span>
+          ${v(95) || v(96) ? '  <span class="field-label">กว้าง×ยาว:</span><span class="field-val">' + vd(95) + ' × ' + vd(96) + ' ซม.</span>' : ''}
+          ${v(97) ? '  <span class="field-label">แหล่งที่มา:</span><span class="field-val">' + v(97) + '</span>' : ''}</div>
+          <div class="field-row"><span class="field-label">ซองเอกสาร:</span><span class="field-val">${vd(56)}</span>
+          ${v(98) || v(99) ? '  <span class="field-label">กว้าง×ยาว:</span><span class="field-val">' + vd(98) + ' × ' + vd(99) + ' ซม.</span>' : ''}
+          ${v(100) ? '  <span class="field-label">แหล่งที่มา:</span><span class="field-val">' + v(100) + '</span>' : ''}</div>`;
+      }
+      var sec3 = `<div class="section">
+        <div class="section-title">ส่วนที่ 3 — ของที่พบ / สิ่งของ</div>
+        <div class="section-body">${sec3Items}
+          <hr class="thin"><b>รูปสิ่งของ:</b><br>${imgs('items_evidence')}
+        </div></div>`;
+
+      var curAddr = addrBlock8(63);
+      var domAddr = addrBlock8(71);
+      var sec4 = `<div class="section">
+        <div class="section-title">ส่วนที่ 4 — ข้อมูลบุคคล</div>
+        <div class="section-body">
+          <div class="field-row"><span class="field-label">คำนำหน้า:</span><span class="field-val">${vd(3)}</span>
+            <span class="field-label">ชื่อ-นามสกุล:</span><span class="field-val">${v(4)} ${v(5)}</span></div>
+          <div class="field-row"><span class="field-label">อายุ:</span><span class="field-val">${vd(5)}</span>
+            <span class="field-label">เลขบัตรปชช.:</span><span class="field-val">${fixMissingZero(v(6),'idcard')}</span>
+            <span class="field-label">โทร:</span><span class="field-val">${fixMissingZero(v(8),'phone')}</span></div>
+          ${v(101) ? '<div class="field-row"><span class="field-label">การศึกษา:</span><span class="field-val">' + v(101) + '</span>' + (v(102) ? '  <span class="field-label">สถานศึกษา:</span><span class="field-val">' + v(102) + '</span>' : '') + '</div>' : ''}
+          ${v(103) ? '<div class="field-row"><span class="field-label">อาชีพ:</span><span class="field-val">' + v(103) + '</span>' + (v(104) ? '  <span class="field-label">รายได้:</span><span class="field-val">' + v(104) + ' บาท/เดือน</span>' : '') + '</div>' : ''}
+          <hr class="thin">
+          <div class="sub-row"><b>ที่อยู่ปัจจุบัน:</b> ${curAddr}</div>
+          <div class="sub-row"><b>ที่อยู่ตามทะเบียนบ้าน:</b> ${domAddr}</div>
+          <hr class="thin">
+          ${v(105) ? '<div class="field-row"><span class="field-label">บิดา:</span><span class="field-val">' + v(105) + '</span><span class="field-label">โทร:</span><span class="field-val">' + vd(106) + '</span></div>' : ''}
+          ${v(107) ? '<div class="field-row"><span class="field-label">มารดา:</span><span class="field-val">' + v(107) + '</span><span class="field-label">โทร:</span><span class="field-val">' + vd(108) + '</span></div>' : ''}
+          ${v(109) ? '<div class="field-row"><span class="field-label">ผู้ปกครอง:</span><span class="field-val">' + v(109) + '</span><span class="field-label">โทร:</span><span class="field-val">' + vd(110) + '</span></div>' : ''}
+          ${v(24) ? '<div class="field-row"><span class="field-label">ผู้ติดต่อ:</span><span class="field-val">' + v(24) + '</span><span class="field-label">ความสัมพันธ์:</span><span class="field-val">' + vd(25) + '</span><span class="field-label">โทร:</span><span class="field-val">' + vd(26) + '</span></div>' : ''}
+          <hr class="thin"><b>รูปบุคคล:</b><br>${imgs('person_portrait')}
+        </div></div>`;
+
+      var sec5 = `<div class="section">
+        <div class="section-title">ส่วนที่ 5 — ลักษณะและพฤติกรรม</div>
+        <div class="section-body">
+          <div class="field-row"><span class="field-label">การแต่งกาย:</span><span class="field-val">${vd(9)}</span></div>
+          ${v(10) ? '<div class="field-row"><span class="field-label">รายละเอียด:</span><span class="field-val">' + v(10) + '</span></div>' : ''}
+          <div class="field-row"><span class="field-label">การพูดจา:</span><span class="field-val">${vd(13)}</span></div>
+          ${v(14) ? '<div class="field-row"><span class="field-label">รายละเอียด:</span><span class="field-val">' + v(14) + '</span></div>' : ''}
+          <div class="field-row"><span class="field-label">เคยเข้าเฝ้า:</span><span class="field-val">${vd(15)}</span>
+          ${v(111) ? '  <span class="field-label">จำนวนครั้ง:</span><span class="field-val">' + v(111) + '</span>' : ''}</div>
+          ${v(16) ? '<div class="field-row"><span class="field-label">สถานที่เข้าเฝ้า:</span><span class="field-val">' + v(16) + '</span></div>' : ''}
+          <hr class="thin"><b>รูปลักษณะ:</b><br>${imgs('appearance_photo')}
+        </div></div>`;
+
+      var incAddr = '';
+      if (v(79)||v(80)||v(81)||v(82)||v(38)||v(39)||v(40)) {
+        incAddr = `<div class="sub-row"><b>ที่อยู่เกิดเหตุ:</b> ` +
+          [v(79)?'บ้านเลขที่ '+v(79):'', v(80)?'หมู่ '+v(80):'', v(81)?'ซอย '+v(81):'',
+           v(82)?'ถนน '+v(82):'', v(38)?'ตำบล '+v(38):'', v(39)?'อำเภอ '+v(39):'', v(40)?'จังหวัด '+v(40):'', v(83)?'รหัส '+v(83):'']
+          .filter(Boolean).join('  ') + '</div>';
+      }
+      var bkkAddr = '';
+      if (v(84)) {
+        bkkAddr = '<div class="sub-row"><b>ที่พักใน กทม.:</b> ' + v(84) + '  ' + addrBlock8(85) + '</div>';
+      }
+      var sec6 = `<div class="section">
+        <div class="section-title">ส่วนที่ 6 — เรื่องร้องเรียน / การเดินทาง</div>
+        <div class="section-body">
+          ${v(112) ? '<div class="field-row"><span class="field-label">ประเภทคำร้อง:</span><span class="field-val">' + v(112) + '</span></div>' : ''}
+          ${v(35) ? '<div class="field-row"><span class="field-label">เรื่อง:</span><span class="field-val">' + v(35) + '</span></div>' : ''}
+          ${v(36) ? '<div class="field-row"><span class="field-label">สาเหตุ:</span><span class="field-val">' + v(36) + '</span></div>' : ''}
+          ${v(17) ? '<div class="field-row"><span class="field-label">สรุป:</span><span class="field-val">' + v(17) + '</span></div>' : ''}
+          ${incAddr}
+          ${v(18) ? '<div class="field-row"><span class="field-label">เคยร้องเรียน:</span><span class="field-val">' + v(18) + '</span>' + (v(19) ? '  <span class="field-label">รายละเอียด:</span><span class="field-val">' + v(19) + '</span>' : '') + '</div>' : ''}
+          ${v(21) ? '<div class="field-row"><span class="field-label">จังหวัดที่เดินทางผ่าน:</span><span class="field-val">' + v(21) + '</span></div>' : ''}
+          ${v(23) ? '<div class="field-row"><span class="field-label">พาหนะ:</span><span class="field-val">' + v(23) + '</span></div>' : ''}
+          ${bkkAddr}
+        </div></div>`;
+
+      var sec71 = `<div class="section">
+        <div class="section-title">ส่วนที่ 7.1 — แหล่งที่มา (ข้อมูล 1)</div>
+        <div class="section-body">
+          ${sourceBlock(113, 121, 127, 20)}
+          <hr class="thin"><b>รูปประกอบ 7.1:</b><br>
+          ${imgs('source_profile_71')}${imgs('source_post_71')}${imgs('source_other_71')}
+        </div></div>`;
+
+      var sec72 = `<div class="section">
+        <div class="section-title">ส่วนที่ 7.2 — แหล่งที่มา (ข้อมูล 2)</div>
+        <div class="section-body">
+          ${sourceBlock(128, 136, 142, 28)}
+          <hr class="thin"><b>รูปประกอบ 7.2:</b><br>
+          ${imgs('source_profile_72')}${imgs('source_post_72')}${imgs('source_other_72')}
+        </div></div>`;
+
+      var sec73 = v(27) ? `<div class="section">
+        <div class="section-title">ส่วนที่ 7.3 — ประวัติบุคคล</div>
+        <div class="section-body"><div class="sub-row">${v(27)}</div></div></div>` : '';
+
+      var petDates = [v(144),v(145),v(146),v(147)].filter(Boolean).join(', ');
+      var sec74 = `<div class="section">
+        <div class="section-title">ส่วนที่ 7.4 — ผลการดำเนินการ</div>
+        <div class="section-body">
+          <div class="field-row"><span class="field-label">สถานะ:</span><span class="field-val">${vd(29)}</span>
+          ${v(143) ? '  <span class="field-label">จำนวน:</span><span class="field-val">' + v(143) + '</span>' : ''}</div>
+          ${v(30) ? '<div class="field-row"><span class="field-label">รายละเอียด:</span><span class="field-val">' + v(30) + '</span></div>' : ''}
+          ${petDates ? '<div class="field-row"><span class="field-label">วันที่ดำเนินการ:</span><span class="field-val">' + petDates + '</span></div>' : ''}
+          ${v(148) ? '<div class="field-row"><span class="field-label">ยื่นเอกสาร:</span><span class="field-val">' + v(148) + '</span>' + (v(149) ? '  <span class="field-label">วันที่:</span><span class="field-val">' + v(149) + '</span>' : '') + '</div>' : ''}
+          ${v(150) ? '<div class="field-row"><span class="field-label">รายละเอียดเอกสาร:</span><span class="field-val">' + v(150) + '</span></div>' : ''}
+        </div></div>`;
+
+      var sec75_9 = '';
+      [[31,'7.5'],[32,'7.6'],[33,'7.7'],[34,'7.8'],[151,'7.9']].forEach(function(pair) {
+        if (v(pair[0])) {
+          sec75_9 += `<div class="section">
+            <div class="section-title">ส่วนที่ ${pair[1]}</div>
+            <div class="section-body"><div class="sub-row">${v(pair[0])}</div></div></div>`;
+        }
+      });
+
+      var metaLine = 'บันทึกเมื่อ: ' + (vd(61)) + (v(62) && v(62) !== v(61) ? '  |  แก้ไขล่าสุด: ' + v(62) : '') +
+                     '  |  Record ID: ' + recordId + '  |  ลำดับที่: ' + (seqNo || '-');
+
+      return `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
+        <title>PDF — ${v(4)} ${v(5)} — ลำดับที่ ${seqNo || ''}</title>
+        <style>${css}</style></head><body>
+        <div class="pdf-wrap">
+          <div class="pdf-header">
+            <h2>รายงานรายละเอียดบุคคล</h2>
+            <div class="sub">สถานีตำรวจ — ระบบจัดการผู้ที่มาติดต่อ</div>
+          </div>
+          <div class="meta-bar no-print">${metaLine}</div>
+          ${sec1}${sec2}${sec3}
+          <div class="page-break"></div>
+          ${sec4}${sec5}${sec6}
+          <div class="page-break"></div>
+          ${sec71}${sec72}${sec73}${sec74}${sec75_9}
+          <div class="meta-bar" style="margin-top:12px;font-size:9pt;color:#999">
+            พิมพ์เมื่อ: ${new Date().toLocaleString('th-TH')} | ${metaLine}
+          </div>
+        </div>
+        <script>
+          window.addEventListener('afterprint', function() { window.close(); });
+        <\/script>
+        </body></html>`;
     }
   </script>
 </body>
