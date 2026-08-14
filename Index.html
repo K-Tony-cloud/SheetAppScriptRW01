@@ -293,71 +293,191 @@
 
     <!-- ===== FORM VIEW (Create & Edit) ===== -->
     <div id="formView" class="d-none">
-      <!-- Edit mode banner (hidden in create mode) -->
-      <div id="editModeBanner" class="d-none alert edit-mode-banner d-flex align-items-center mb-4 mx-auto" style="max-width: 900px;" role="alert">
+      <div id="editModeBanner" class="d-none alert edit-mode-banner d-flex align-items-center mb-4 mx-auto" style="max-width: 960px;" role="alert">
         <i class="fas fa-edit me-3 fs-4 text-warning"></i>
         <div>กำลังแก้ไขข้อมูลของ: <strong id="editModeName" class="text-dark"></strong></div>
       </div>
-
       <h3 class="fw-bold text-center mb-4" id="formTitle">
         <i class="fas fa-file-signature text-primary"></i> แบบฟอร์มลงข้อมูลใหม่
       </h3>
 
-      <form id="dataForm" onsubmit="handleFormSubmit(event)" class="mx-auto" style="max-width: 900px;">
+      <form id="dataForm" onsubmit="handleFormSubmit(event)" class="mx-auto" style="max-width: 960px;">
 
-        <!-- Section 1: Personal Info -->
+        <!-- S1: วัน/เดือน/ปี/มีหมายเสด็จ -->
         <div class="card card-form mb-4 border-top border-primary border-4 shadow-sm">
-          <div class="card-header text-primary"><i class="fas fa-user"></i> 1. ข้อมูลส่วนตัวเบื้องต้น</div>
+          <div class="card-header text-primary"><i class="fas fa-calendar-alt"></i> 1. วัน / เดือน / ปี / มีหมายเสด็จหรือไม่</div>
           <div class="card-body p-4 bg-white">
-            <div class="row">
-              <div class="col-md-6 mb-3"><label class="form-label">วันเดือนปี</label><input type="date" class="form-control" name="col2" required></div>
-              <div class="col-md-6 mb-3"><label class="form-label">เวลาประมาณ</label><input type="time" class="form-control" name="col3" required></div>
-              <div class="col-md-3 mb-3">
+            <div class="row g-3">
+              <div class="col-md-4 col-6"><label class="form-label">1.1 วันที่</label><input type="date" class="form-control" name="col2" required></div>
+              <div class="col-md-4 col-6"><label class="form-label">เวลาประมาณ</label><input type="time" class="form-control" name="col3" required></div>
+              <div class="col-md-4">
+                <label class="form-label">หมายเสด็จ</label>
+                <select class="form-select" name="col42" id="noticeStatus" onchange="onNoticeStatusChange()">
+                  <option value="ไม่มีหมายเสด็จ">ไม่มีหมายเสด็จ</option>
+                  <option value="มีหมายเสด็จ">มีหมายเสด็จ</option>
+                </select>
+              </div>
+              <div class="col-12 d-none" id="noticeDetailRow">
+                <label class="form-label">ของ</label>
+                <input type="text" class="form-control" name="col43" placeholder="ระบุพระนาม/รายละเอียดหมายเสด็จ">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- S2: ข้อมูลการตรวจพบและการนำส่ง -->
+        <div class="card card-form mb-4 border-top border-success border-4 shadow-sm">
+          <div class="card-header text-success"><i class="fas fa-search-location"></i> 2. ข้อมูลการตรวจพบและการนำส่ง</div>
+          <div class="card-body p-4 bg-white">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">2.1 สถานที่ตรวจพบ</label>
+                <select class="form-select" name="col44" onchange="onFoundLocationChange(this)">
+                  <option value="">-- เลือกสถานที่ --</option>
+                  <option value="จุดคัดกรอง">จุดคัดกรอง</option>
+                  <option value="อุโมงค์">อุโมงค์</option>
+                  <option value="สน.พระราชวัง">สน.พระราชวัง</option>
+                  <option value="อื่น ๆ">อื่น ๆ</option>
+                </select>
+              </div>
+              <div class="col-md-8 d-none" id="foundLocationDetailRow">
+                <label class="form-label">รายละเอียดสถานที่ตรวจพบ</label>
+                <input type="text" class="form-control" name="col45" placeholder="ระบุรายละเอียด (กรณีอื่น ๆ)">
+              </div>
+              <div class="col-md-3 col-6"><label class="form-label fw-semibold">2.2 วันที่ตรวจพบ</label><input type="date" class="form-control" name="col46"></div>
+              <div class="col-md-3 col-6"><label class="form-label">เวลาที่ตรวจพบ</label><input type="time" class="form-control" name="col47"></div>
+              <div class="col-12"><label class="form-label fw-semibold">2.3 เจ้าหน้าที่/บุคคลที่ตรวจพบ</label></div>
+              <div class="col-md-2 col-4"><label class="form-label form-label-sm">ยศ</label><input type="text" class="form-control" name="col48"></div>
+              <div class="col-md-4 col-8"><label class="form-label form-label-sm">ชื่อ-นามสกุล</label><input type="text" class="form-control" name="col49"></div>
+              <div class="col-md-3 col-6"><label class="form-label form-label-sm">โทรศัพท์</label><input type="text" class="form-control" name="col50"></div>
+              <div class="col-md-3 col-6"><label class="form-label form-label-sm">ตำแหน่ง/หน้าที่</label><input type="text" class="form-control" name="col94"></div>
+              <div class="col-12 text-muted small fst-italic"><i class="fas fa-camera me-1"></i> ถ่ายภาพบุคคลตรวจพบ → บันทึกในหมวด "officer_found" หลังบันทึกข้อมูลแล้ว</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- S3: จุดที่อยู่สิ่งของ -->
+        <div class="card card-form mb-4 border-top border-warning border-4 shadow-sm">
+          <div class="card-header" style="color:#856404;"><i class="fas fa-box-open"></i> 3. จุดที่อยู่สิ่งของและสิ่งของที่นำมายื่นฯ</div>
+          <div class="card-body p-4 bg-white">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">3.1 การเก็บ/ตำแหน่งของสิ่งของ</label>
+                <select class="form-select" name="col53">
+                  <option value="">-- เลือก --</option>
+                  <option value="เห็นเด่นชัด">เห็นเด่นชัด</option>
+                  <option value="ซุกซ่อนไว้">ซุกซ่อนไว้</option>
+                </select>
+              </div>
+              <div class="col-md-8"><label class="form-label">อย่างไร</label><input type="text" class="form-control" name="col54" placeholder="ระบุรายละเอียด"></div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">3.2 ลักษณะการนำพา</label>
+                <select class="form-select" name="col55" onchange="onCarryMethodChange(this)">
+                  <option value="">-- เลือก --</option>
+                  <option value="สะพายข้าง">สะพายข้าง</option>
+                  <option value="สะพายเป้">สะพายเป้</option>
+                  <option value="หิ้ว/ถือ">หิ้ว/ถือ</option>
+                  <option value="อื่น ๆ">อื่น ๆ</option>
+                </select>
+              </div>
+              <div class="col-md-8 d-none" id="carryMethodDetailRow">
+                <label class="form-label">ระบุรายละเอียด (อื่น ๆ)</label>
+                <input type="text" class="form-control" name="col95">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">3.3 บรรจุภัณฑ์ใส่เอกสาร</label>
+                <select class="form-select" name="col56">
+                  <option value="">-- เลือกประเภท --</option>
+                  <option value="ถุงผ้า">ถุงผ้า</option>
+                  <option value="ถุงกระดาษ">ถุงกระดาษ</option>
+                  <option value="ถุงพลาสติก">ถุงพลาสติก</option>
+                  <option value="กระเป๋า">กระเป๋า</option>
+                  <option value="อื่น ๆ">อื่น ๆ</option>
+                </select>
+              </div>
+              <div class="col-md-2 col-4"><label class="form-label form-label-sm">กว้าง (ซม.)</label><input type="number" class="form-control" name="col96" min="0" step="0.1"></div>
+              <div class="col-md-2 col-4"><label class="form-label form-label-sm">ยาว (ซม.)</label><input type="number" class="form-control" name="col97" min="0" step="0.1"></div>
+              <div class="col-md-4"><label class="form-label form-label-sm">ที่มาของบรรจุภัณฑ์</label><input type="text" class="form-control" name="col98"></div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">3.4 การใส่ซองเอกสาร</label>
+                <select class="form-select" name="col57" onchange="onEnvelopeStatusChange(this)">
+                  <option value="ไม่ใส่ซอง">ไม่ใส่ซอง</option>
+                  <option value="ใส่ซอง">ใส่ซอง</option>
+                </select>
+              </div>
+              <div class="col-12 d-none" id="envelopeDetailFields">
+                <div class="row g-2">
+                  <div class="col-md-2 col-4"><label class="form-label form-label-sm">กว้าง (ซม.)</label><input type="number" class="form-control form-control-sm" name="col99" min="0" step="0.1"></div>
+                  <div class="col-md-2 col-4"><label class="form-label form-label-sm">ยาว (ซม.)</label><input type="number" class="form-control form-control-sm" name="col100" min="0" step="0.1"></div>
+                  <div class="col-md-4"><label class="form-label form-label-sm">ที่มาของซองเอกสาร</label><input type="text" class="form-control form-control-sm" name="col101"></div>
+                </div>
+              </div>
+              <div class="col-12 text-muted small fst-italic"><i class="fas fa-camera me-1"></i> ถ่ายภาพสิ่งของ/หลักฐาน → บันทึกในหมวด "items_evidence" หลังบันทึกข้อมูลแล้ว</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- S4: ข้อมูลส่วนตัวของผู้ถวายฎีกา -->
+        <div class="card card-form mb-4 border-top border-danger border-4 shadow-sm">
+          <div class="card-header text-danger"><i class="fas fa-user-circle"></i> 4. ข้อมูลส่วนตัวของผู้ถวายฎีกา</div>
+          <div class="card-body p-4 bg-white">
+            <div class="row g-3">
+              <div class="col-md-2 col-4">
                 <label class="form-label">คำนำหน้า</label>
                 <select class="form-select" name="col4">
                   <option value="นาย">นาย</option>
                   <option value="นาง">นาง</option>
                   <option value="นางสาว">นางสาว</option>
+                  <option value="ด.ช.">ด.ช.</option>
+                  <option value="ด.ญ.">ด.ญ.</option>
                   <option value="อื่นๆ">อื่นๆ</option>
                 </select>
               </div>
-              <div class="col-md-5 mb-3"><label class="form-label">ชื่อ - สกุล</label><input type="text" class="form-control" name="col5" required></div>
-              <div class="col-md-4 mb-3"><label class="form-label">อายุ</label><input type="number" class="form-control" name="col6"></div>
-              <div class="col-md-6 mb-3"><label class="form-label">เลขบัตร ปชช.</label><input type="text" class="form-control" name="col7" maxlength="13"></div>
-              <div class="col-md-6 mb-3"><label class="form-label">เบอร์โทร</label><input type="text" class="form-control" name="col9"></div>
-              <!-- ที่อยู่ปัจจุบัน (structured — col64-71) -->
-              <div class="col-12 mb-3">
-                <label class="form-label fw-bold text-primary"><i class="fas fa-map-marker-alt"></i> ที่อยู่ปัจจุบัน</label>
+              <div class="col-md-5 col-8"><label class="form-label">ชื่อ - สกุล</label><input type="text" class="form-control" name="col5" required></div>
+              <div class="col-md-2 col-4"><label class="form-label">อายุ</label><input type="number" class="form-control" name="col6" min="0" max="120"></div>
+              <div class="col-md-3 col-8"><label class="form-label">เลขบัตรประชาชน</label><input type="text" class="form-control" name="col7" maxlength="13"></div>
+              <div class="col-md-3"><label class="form-label">โทรศัพท์</label><input type="text" class="form-control" name="col9"></div>
+              <div class="col-md-3"><label class="form-label">การศึกษา</label><input type="text" class="form-control" name="col102"></div>
+              <div class="col-md-3"><label class="form-label">สถานศึกษา</label><input type="text" class="form-control" name="col103"></div>
+              <div class="col-md-3"><label class="form-label">อาชีพ</label><input type="text" class="form-control" name="col104"></div>
+              <div class="col-md-3"><label class="form-label">รายได้ประมาณ</label><input type="text" class="form-control" name="col105" placeholder="บาท/เดือน"></div>
+              <div class="col-12 text-muted small fst-italic"><i class="fas fa-camera me-1"></i> ถ่ายภาพผู้ยื่นถวายฎีกา → บันทึกในหมวด "person_portrait" หลังบันทึกข้อมูลแล้ว</div>
+              <div class="col-12"><hr class="my-1"><small class="text-muted fw-bold">ข้อมูลครอบครัว</small></div>
+              <div class="col-md-5 col-8"><label class="form-label form-label-sm">ชื่อบิดา</label><input type="text" class="form-control" name="col106"></div>
+              <div class="col-md-3 col-4"><label class="form-label form-label-sm">โทรศัพท์บิดา</label><input type="text" class="form-control" name="col107"></div>
+              <div class="col-md-5 col-8"><label class="form-label form-label-sm">ชื่อมารดา</label><input type="text" class="form-control" name="col108"></div>
+              <div class="col-md-3 col-4"><label class="form-label form-label-sm">โทรศัพท์มารดา</label><input type="text" class="form-control" name="col109"></div>
+              <div class="col-md-5 col-8"><label class="form-label form-label-sm">ชื่อผู้ปกครอง</label><input type="text" class="form-control" name="col110"></div>
+              <div class="col-md-3 col-4"><label class="form-label form-label-sm">โทรศัพท์ผู้ปกครอง</label><input type="text" class="form-control" name="col111"></div>
+              <div class="col-12"><hr class="my-1"><small class="text-muted fw-bold">บุคคลที่สามารถติดต่อได้</small></div>
+              <div class="col-md-4"><label class="form-label form-label-sm">ชื่อ/ข้อมูลบุคคลที่ติดต่อได้</label><input type="text" class="form-control" name="col25"></div>
+              <div class="col-md-4"><label class="form-label form-label-sm">เกี่ยวข้องเป็น</label><input type="text" class="form-control" name="col26"></div>
+              <div class="col-md-4"><label class="form-label form-label-sm">โทรศัพท์</label><input type="text" class="form-control" name="col27"></div>
+              <!-- ที่อยู่ปัจจุบัน (col64-71) -->
+              <div class="col-12">
+                <label class="form-label fw-bold text-danger"><i class="fas fa-map-marker-alt me-1"></i>ที่อยู่ปัจจุบัน</label>
                 <div class="row g-2 mt-1">
                   <div class="col-6 col-md-3"><label class="form-label form-label-sm">บ้านเลขที่</label><input type="text" class="form-control form-control-sm" name="col64" placeholder="เช่น 123/4"></div>
-                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col65" placeholder="เช่น 5"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col65"></div>
                   <div class="col-6 col-md-3"><label class="form-label form-label-sm">ซอย</label><input type="text" class="form-control form-control-sm" name="col66"></div>
                   <div class="col-6 col-md-3"><label class="form-label form-label-sm">ถนน</label><input type="text" class="form-control form-control-sm" name="col67"></div>
                   <div class="col-6 col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><input type="text" class="form-control form-control-sm" name="col68"></div>
                   <div class="col-6 col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><input type="text" class="form-control form-control-sm" name="col69"></div>
-                  <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label>
-                    <select class="form-select form-select-sm" name="col70" id="currentAddressProvince">
-                      <option value="">-- เลือกจังหวัด --</option>
-                    </select>
-                  </div>
+                  <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label><select class="form-select form-select-sm" name="col70" id="currentAddressProvince"><option value="">-- เลือกจังหวัด --</option></select></div>
                   <div class="col-12"><label class="form-label form-label-sm">สถานีตำรวจที่พื้นที่รับผิดชอบ</label><input type="text" class="form-control form-control-sm" name="col71"></div>
                 </div>
               </div>
-              <!-- ที่อยู่ภูมิลำเนา (structured — col72-79) -->
+              <!-- ที่อยู่ภูมิลำเนา (col72-79) -->
               <div class="col-12">
-                <label class="form-label fw-bold text-primary"><i class="fas fa-home"></i> ที่อยู่ภูมิลำเนา</label>
+                <label class="form-label fw-bold text-danger"><i class="fas fa-home me-1"></i>ที่อยู่ภูมิลำเนา</label>
                 <div class="row g-2 mt-1">
                   <div class="col-6 col-md-3"><label class="form-label form-label-sm">บ้านเลขที่</label><input type="text" class="form-control form-control-sm" name="col72" placeholder="เช่น 123/4"></div>
-                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col73" placeholder="เช่น 5"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col73"></div>
                   <div class="col-6 col-md-3"><label class="form-label form-label-sm">ซอย</label><input type="text" class="form-control form-control-sm" name="col74"></div>
                   <div class="col-6 col-md-3"><label class="form-label form-label-sm">ถนน</label><input type="text" class="form-control form-control-sm" name="col75"></div>
                   <div class="col-6 col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><input type="text" class="form-control form-control-sm" name="col76"></div>
                   <div class="col-6 col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><input type="text" class="form-control form-control-sm" name="col77"></div>
-                  <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label>
-                    <select class="form-select form-select-sm" name="col78" id="domicileProvince">
-                      <option value="">-- เลือกจังหวัด --</option>
-                    </select>
-                  </div>
+                  <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label><select class="form-select form-select-sm" name="col78" id="domicileProvince"><option value="">-- เลือกจังหวัด --</option></select></div>
                   <div class="col-12"><label class="form-label form-label-sm">สถานีตำรวจที่พื้นที่รับผิดชอบ</label><input type="text" class="form-control form-control-sm" name="col79"></div>
                 </div>
               </div>
@@ -365,123 +485,132 @@
           </div>
         </div>
 
-        <!-- Section 2: Observation -->
+        <!-- S5: การตรวจสอบและการสังเกตเบื้องต้น -->
         <div class="card card-form mb-4 border-top border-success border-4 shadow-sm">
-          <div class="card-header text-success"><i class="fas fa-eye"></i> 2. การตรวจสอบและสังเกตเบื้องต้น</div>
+          <div class="card-header text-success"><i class="fas fa-eye"></i> 5. การตรวจสอบและการสังเกตเบื้องต้น</div>
           <div class="card-body p-4 bg-white">
-            <div class="row">
-              <div class="col-md-4 mb-3">
-                <label class="form-label">1. การแต่งกาย</label>
-                <select class="form-select" name="col10"><option value="ถูกต้อง">ถูกต้อง</option><option value="ไม่ถูกต้อง">ไม่ถูกต้อง</option></select>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">5.1 การแต่งกาย</label>
+                <select class="form-select" name="col10" onchange="onClothingChange(this)">
+                  <option value="ถูกต้อง">ถูกต้อง</option>
+                  <option value="ไม่ถูกต้อง">ไม่ถูกต้อง</option>
+                </select>
               </div>
-              <div class="col-md-8 mb-3"><label class="form-label">ระบุรายละเอียด (การแต่งกาย)</label><input type="text" class="form-control" name="col11"></div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label">2. กระเป๋า/อุปกรณ์</label>
-                <select class="form-select" name="col12"><option value="ไม่มี">ไม่มี</option><option value="มี">มี</option></select>
+              <div class="col-md-8 d-none" id="clothingDetailRow">
+                <label class="form-label">อย่างไร</label>
+                <input type="text" class="form-control" name="col11" placeholder="ระบุรายละเอียดการแต่งกาย">
               </div>
-              <div class="col-md-8 mb-3"><label class="form-label">ระบุรายละเอียด (กระเป๋า)</label><input type="text" class="form-control" name="col13"></div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label">3. การพูดคุยรู้เรื่อง</label>
-                <select class="form-select" name="col14"><option value="ปกติ">ปกติ</option><option value="ไม่ปกติ">ไม่ปกติ</option></select>
+              <div class="col-12 text-muted small fst-italic"><i class="fas fa-camera me-1"></i> ถ่ายภาพการแต่งกาย → บันทึกในหมวด "appearance_photo" หลังบันทึกข้อมูลแล้ว</div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">5.2 การสนทนาพูดคุย</label>
+                <select class="form-select" name="col14" onchange="onSpeechChange(this)">
+                  <option value="ปกติ">ปกติ</option>
+                  <option value="ไม่ปกติ">ไม่ปกติ</option>
+                </select>
               </div>
-              <div class="col-md-8 mb-3"><label class="form-label">ระบุรายละเอียด (การพูดคุย)</label><input type="text" class="form-control" name="col15"></div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label">4. เคยมารับเสด็จหรือไม่</label>
-                <select class="form-select" name="col16"><option value="ไม่เคย">ไม่เคย</option><option value="เคย">เคย</option></select>
+              <div class="col-md-8 d-none" id="speechDetailRow">
+                <label class="form-label">อย่างไร</label>
+                <input type="text" class="form-control" name="col15" placeholder="ระบุรายละเอียดการสนทนา">
               </div>
-              <div class="col-md-8 mb-3"><label class="form-label">ระบุรายละเอียด (รับเสด็จ)</label><input type="text" class="form-control" name="col17"></div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">5.3 เคยมารับเสด็จหรือไม่</label>
+                <select class="form-select" name="col16" onchange="onVisitedRoyalChange(this)">
+                  <option value="ไม่เคย">ไม่เคย</option>
+                  <option value="เคย">เคย</option>
+                </select>
+              </div>
+              <div class="col-md-8 d-none" id="visitedRoyalDetailRow">
+                <div class="row g-2">
+                  <div class="col-md-4 col-5"><label class="form-label form-label-sm">จำนวน (ครั้ง)</label><input type="number" class="form-control form-control-sm" name="col112" min="1"></div>
+                  <div class="col-md-8 col-7"><label class="form-label form-label-sm">ที่ไหนบ้าง</label><input type="text" class="form-control form-control-sm" name="col17"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Section 3: Complaint -->
-        <div class="card card-form mb-4 border-top border-danger border-4 shadow-sm">
-          <div class="card-header text-danger"><i class="fas fa-file-alt"></i> 3. รายละเอียดเรื่องร้องเรียนและการเดินทาง</div>
+        <!-- S6: รายละเอียดเรื่องที่ถวายฎีกา -->
+        <div class="card card-form mb-4 border-top border-info border-4 shadow-sm">
+          <div class="card-header" style="color:#055160;"><i class="fas fa-file-alt"></i> 6. รายละเอียดเรื่องที่ถวายฎีกา</div>
           <div class="card-body p-4 bg-white">
-            <div class="row">
-              <div class="col-12 mb-3"><label class="form-label">1. เป็นเรื่องอะไร โดยสังเขป</label><textarea class="form-control" name="col18" rows="2"></textarea></div>
-              <!-- สถานที่เกิดเรื่อง (col80-84 + reuse col39/40/41) -->
-              <div class="col-12 mb-3">
-                <label class="form-label fw-bold text-danger"><i class="fas fa-map-pin"></i> สถานที่เกิดเรื่อง</label>
-                <div class="row g-2 mt-1">
-                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">บ้านเลขที่</label><input type="text" class="form-control form-control-sm" name="col80"></div>
-                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col81"></div>
-                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">ซอย</label><input type="text" class="form-control form-control-sm" name="col82"></div>
-                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">ถนน</label><input type="text" class="form-control form-control-sm" name="col83"></div>
-                  <div class="col-md-4">
-                    <label class="form-label">จังหวัด</label>
-                    <select class="form-select" name="col39" id="incidentProvince" onchange="onIncidentProvinceChange(this)">
-                      <option value="">-- เลือกจังหวัด --</option>
-                    </select>
-                  </div>
-                  <div class="col-md-4">
-                    <label class="form-label">อำเภอ/เขต</label>
-                    <select class="form-select" name="col40" id="incidentAmphoe" onchange="onIncidentAmphoeChange(this)" disabled>
-                      <option value="">-- เลือกอำเภอ/เขต --</option>
-                    </select>
-                  </div>
-                  <div class="col-md-4">
-                    <label class="form-label">ตำบล/แขวง</label>
-                    <select class="form-select" name="col41" id="incidentTambon" disabled>
-                      <option value="">-- เลือกตำบล/แขวง --</option>
-                    </select>
-                  </div>
-                  <div class="col-12"><label class="form-label form-label-sm">สถานีตำรวจที่พื้นที่รับผิดชอบ</label><input type="text" class="form-control form-control-sm" name="col84"></div>
-                </div>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">6.1 ประเภทการยื่น</label>
+                <select class="form-select" name="col113">
+                  <option value="">-- เลือก --</option>
+                  <option value="เรื่องใหม่">เรื่องใหม่</option>
+                  <option value="เรื่องเดิม (ยื่นเอกสารเพิ่มเติม)">เรื่องเดิม (ยื่นเอกสารเพิ่มเติม)</option>
+                </select>
               </div>
-              <div class="col-md-6 mb-3">
-                <label class="form-label">2. ประเภทของเรื่องที่ยื่น</label>
+              <div class="col-md-8"><label class="form-label">เป็นเรื่องอะไร โดยสังเขป</label><textarea class="form-control" name="col18" rows="2"></textarea></div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">6.2 ประเภทของเรื่องที่ยื่น</label>
                 <select class="form-select" name="col36">
                   <option value="">-- เลือกประเภท --</option>
                   <option value="ขอความช่วยเหลือ">ขอความช่วยเหลือ</option>
                   <option value="ขอความเป็นธรรม">ขอความเป็นธรรม</option>
                   <option value="ขอพระราชทานอภัยโทษ">ขอพระราชทานอภัยโทษ</option>
                   <option value="ร้องเรียน">ร้องเรียน</option>
-                  <option value="อื่นๆ">อื่นๆ</option>
+                  <option value="อื่น ๆ">อื่น ๆ</option>
                 </select>
               </div>
-              <div class="col-md-6 mb-3">
-                <label class="form-label">3. สาเหตุของเรื่องที่ยื่น</label>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">6.3 สาเหตุของเรื่องที่ยื่น</label>
                 <select class="form-select" name="col37">
                   <option value="">-- เลือกสาเหตุ --</option>
                   <option value="ถูกข่มขู่/กลั่นแกล้ง">ถูกข่มขู่/กลั่นแกล้ง</option>
+                  <option value="ร้องเรียน พฤติกรรม/การทำงานของเจ้าหน้าที่/หน่วยงานรัฐ">ร้องเรียน พฤติกรรม/การทำงานของเจ้าหน้าที่/หน่วยงานรัฐ</option>
                   <option value="ค่ารักษาพยาบาล">ค่ารักษาพยาบาล</option>
-                  <option value="การศึกษา">การศึกษา</option>
-                  <option value="ข้อพิพาท/คดีความ">ข้อพิพาท/คดีความ</option>
-                  <option value="ขอใช้ประโยชน์พื้นที่">ขอใช้ประโยชน์พื้นที่</option>
-                  <option value="ขอเป็นคนไข้ในพระบรมราชานุเคราะห์">ขอเป็นคนไข้ในพระบรมราชานุเคราะห์</option>
-                  <option value="ขอพระราชทานอภัยโทษ">ขอพระราชทานอภัยโทษ</option>
-                  <option value="ขอสัญชาติ">ขอสัญชาติ</option>
-                  <option value="ถนน/เส้นทางสัญจร">ถนน/เส้นทางสัญจร</option>
-                  <option value="ร้องเรียน พฤติกรรม/การทำงาน ของเจ้าหน้าที่/หน่วยงานรัฐ">ร้องเรียน พฤติกรรม/การทำงาน ของเจ้าหน้าที่/หน่วยงานรัฐ</option>
                   <option value="หนี้สิน">หนี้สิน</option>
+                  <option value="การศึกษา">การศึกษา</option>
                   <option value="มีอาการทางจิต">มีอาการทางจิต</option>
+                  <option value="ข้อพิพาท/คดีความ">ข้อพิพาท/คดีความ</option>
                   <option value="การประกอบอาชีพ">การประกอบอาชีพ</option>
+                  <option value="ขอใช้ประโยชน์พื้นที่">ขอใช้ประโยชน์พื้นที่</option>
                   <option value="ที่ดิน/ที่ทำกิน/ที่อยู่อาศัย">ที่ดิน/ที่ทำกิน/ที่อยู่อาศัย</option>
+                  <option value="ขอเป็นคนไข้ในพระบรมราชานุเคราะห์">ขอเป็นคนไข้ในพระบรมราชานุเคราะห์</option>
                   <option value="ขอเข้าเฝ้า">ขอเข้าเฝ้า</option>
+                  <option value="ขอพระราชทานอภัยโทษ">ขอพระราชทานอภัยโทษ</option>
                   <option value="พยายามเข้าไปในพระบรมมหาราชวัง">พยายามเข้าไปในพระบรมมหาราชวัง</option>
-                  <option value="อื่นๆ">อื่นๆ</option>
+                  <option value="ขอสัญชาติไทย">ขอสัญชาติไทย</option>
+                  <option value="ถนน/เส้นทางสัญจร">ถนน/เส้นทางสัญจร</option>
+                  <option value="อื่น ๆ">อื่น ๆ</option>
                 </select>
               </div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label">4. เคยยื่นร้องเรียนหน่วยใดหรือไม่</label>
-                <select class="form-select" name="col19"><option value="ไม่เคย">ไม่เคย</option><option value="เคย">เคย</option></select>
+              <div class="col-12">
+                <label class="form-label fw-semibold"><i class="fas fa-map-pin me-1 text-danger"></i>สถานที่เกิดเรื่อง</label>
+                <div class="row g-2 mt-1">
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">บ้านเลขที่</label><input type="text" class="form-control form-control-sm" name="col80"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col81"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">ซอย</label><input type="text" class="form-control form-control-sm" name="col82"></div>
+                  <div class="col-6 col-md-3"><label class="form-label form-label-sm">ถนน</label><input type="text" class="form-control form-control-sm" name="col83"></div>
+                  <div class="col-md-4"><label class="form-label form-label-sm">จังหวัด</label><select class="form-select form-select-sm" name="col39" id="incidentProvince" onchange="onIncidentProvinceChange(this)"><option value="">-- เลือกจังหวัด --</option></select></div>
+                  <div class="col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><select class="form-select form-select-sm" name="col40" id="incidentAmphoe" onchange="onIncidentAmphoeChange(this)" disabled><option value="">-- เลือกอำเภอ/เขต --</option></select></div>
+                  <div class="col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><select class="form-select form-select-sm" name="col41" id="incidentTambon" disabled><option value="">-- เลือกตำบล/แขวง --</option></select></div>
+                  <div class="col-12"><label class="form-label form-label-sm">สถานีตำรวจที่พื้นที่รับผิดชอบ</label><input type="text" class="form-control form-control-sm" name="col84"></div>
+                </div>
               </div>
-              <div class="col-md-8 mb-3"><label class="form-label">ระบุ (หน่วยใด/ผลอย่างไร)</label><input type="text" class="form-control" name="col20"></div>
-              <div class="col-md-6 mb-3"><label class="form-label">5. ทราบเรื่องการถวายฎีกาจากที่ใด</label><input type="text" class="form-control" name="col21"></div>
-              <div class="col-md-6 mb-3"><label class="form-label">6. เดินทางมาจากจังหวัดใด</label><input type="text" class="form-control" name="col22"></div>
-              <!-- สถานที่พักใน กทม (col85-93 conditional) -->
-              <div class="col-12 mb-3">
-                <label class="form-label fw-bold">7. สถานที่พักในกรุงเทพฯ</label>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">6.4 เคยยื่นเรื่องร้องเรียนมาก่อนหรือไม่</label>
+                <select class="form-select" name="col19" onchange="onPriorComplaintChange(this)">
+                  <option value="ไม่เคย">ไม่เคย</option>
+                  <option value="เคย">เคย</option>
+                </select>
+              </div>
+              <div class="col-md-8 d-none" id="priorComplaintDetailRow">
+                <label class="form-label">ระบุ (จำนวนครั้ง / หน่วยใด / เมื่อใด / ผลอย่างไร)</label>
+                <input type="text" class="form-control" name="col20">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">6.5 เดินทางมาจากจังหวัดใด</label>
+                <select class="form-select" name="col22" id="travelFromProvince"><option value="">-- เลือกจังหวัด --</option></select>
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-semibold">6.6 สถานที่พักในกรุงเทพฯ</label>
                 <div class="d-flex gap-4 mb-2">
-                  <div class="form-check">
-                    <input class="form-check-input" type="radio" name="col85" id="bangkokStayNo" value="ไม่มีสถานที่พัก" checked onchange="onBangkokStayToggle()">
-                    <label class="form-check-label" for="bangkokStayNo">ไม่มีสถานที่พัก</label>
-                  </div>
-                  <div class="form-check">
-                    <input class="form-check-input" type="radio" name="col85" id="bangkokStayYes" value="มีสถานที่พัก" onchange="onBangkokStayToggle()">
-                    <label class="form-check-label" for="bangkokStayYes">มีสถานที่พัก</label>
-                  </div>
+                  <div class="form-check"><input class="form-check-input" type="radio" name="col85" id="bangkokStayNo" value="ไม่มีสถานที่พัก" checked onchange="onBangkokStayToggle()"><label class="form-check-label" for="bangkokStayNo">ไม่มี</label></div>
+                  <div class="form-check"><input class="form-check-input" type="radio" name="col85" id="bangkokStayYes" value="มีสถานที่พัก" onchange="onBangkokStayToggle()"><label class="form-check-label" for="bangkokStayYes">มี</label></div>
                 </div>
                 <div id="bangkokStayFields" class="d-none border rounded p-3 bg-light">
                   <div class="row g-2">
@@ -491,60 +620,147 @@
                     <div class="col-6 col-md-3"><label class="form-label form-label-sm">ถนน</label><input type="text" class="form-control form-control-sm" name="col89"></div>
                     <div class="col-6 col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><input type="text" class="form-control form-control-sm" name="col90"></div>
                     <div class="col-6 col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><input type="text" class="form-control form-control-sm" name="col91"></div>
-                    <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label>
-                      <select class="form-select form-select-sm" name="col92" id="bangkokStayProvince">
-                        <option value="">-- เลือกจังหวัด --</option>
-                      </select>
-                    </div>
+                    <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label><select class="form-select form-select-sm" name="col92" id="bangkokStayProvince"><option value="">-- เลือกจังหวัด --</option></select></div>
                     <div class="col-12"><label class="form-label form-label-sm">สถานีตำรวจที่พื้นที่รับผิดชอบ</label><input type="text" class="form-control form-control-sm" name="col93"></div>
                   </div>
                 </div>
               </div>
-              <div class="col-md-6 mb-3"><label class="form-label">8. ใช้ยานพาหนะอะไร</label><input type="text" class="form-control" name="col24"></div>
+              <div class="col-md-6"><label class="form-label fw-semibold">6.7 ยานพาหนะที่ใช้เดินทางมากรุงเทพฯ</label><input type="text" class="form-control" name="col24"></div>
             </div>
           </div>
         </div>
 
-        <!-- Section 4: Contact -->
-        <div class="card card-form mb-4 border-top border-warning border-4 shadow-sm">
-          <div class="card-header text-warning text-dark"><i class="fas fa-address-book"></i> 4. บุคคลที่สามารถติดต่อได้</div>
+        <!-- S7: การซักถามข้อมูลเชิงลึก -->
+        <div class="card card-form mb-4 border-top border-dark border-4 shadow-sm">
+          <div class="card-header text-dark"><i class="fas fa-comments"></i> 7. การซักถามข้อมูลเชิงลึก</div>
           <div class="card-body p-4 bg-white">
-            <div class="row">
-              <div class="col-md-4 mb-3"><label class="form-label">7. ชื่อ - สกุล</label><input type="text" class="form-control" name="col25"></div>
-              <div class="col-md-4 mb-3"><label class="form-label">เกี่ยวข้องเป็น</label><input type="text" class="form-control" name="col26"></div>
-              <div class="col-md-4 mb-3"><label class="form-label">เบอร์โทร</label><input type="text" class="form-control" name="col27"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Section 5: Deep Info -->
-        <div class="card card-form mb-4 border-top border-info border-4 shadow-sm">
-          <div class="card-header text-info text-dark"><i class="fas fa-search"></i> 5. ข้อมูลเชิงลึก</div>
-          <div class="card-body p-4 bg-white">
-            <div class="row">
-              <div class="col-12 mb-3"><label class="form-label">8. ความตั้งใจในวันนี้</label><textarea class="form-control" name="col28" rows="2"></textarea></div>
-              <div class="col-12 mb-3"><label class="form-label">9. ทราบจากที่ใดว่าวันนี้จะมีขบวนเสด็จฯ</label><input type="text" class="form-control" name="col29"></div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label">10. เคยเดินทางมายื่นถวายฎีกาที่นี่หรือไม่</label>
-                <select class="form-select" name="col30"><option value="ไม่เคย">ไม่เคย</option><option value="เคย">เคย</option></select>
+            <div class="row g-4">
+              <!-- 7.1 -->
+              <div class="col-12">
+                <label class="form-label fw-semibold">7.1 ทราบเรื่องการถวายฎีกา จากที่ใด</label>
+                <div class="d-flex gap-3 flex-wrap mb-2">
+                  <div class="form-check"><input class="form-check-input" type="radio" name="col21" id="src71Person" value="บุคคลแนะนำ" onchange="onSource71Change()"><label class="form-check-label" for="src71Person">บุคคลแนะนำ</label></div>
+                  <div class="form-check"><input class="form-check-input" type="radio" name="col21" id="src71Online" value="แพลตฟอร์มสื่อออนไลน์" onchange="onSource71Change()"><label class="form-check-label" for="src71Online">แพลตฟอร์มสื่อออนไลน์</label></div>
+                  <div class="form-check"><input class="form-check-input" type="radio" name="col21" id="src71Other" value="อื่น ๆ" onchange="onSource71Change()"><label class="form-check-label" for="src71Other">อื่น ๆ</label></div>
+                </div>
+                <div id="src71PersonFields" class="d-none border rounded p-3 bg-light mb-2">
+                  <div class="row g-2">
+                    <div class="col-12"><small class="fw-bold text-secondary">ข้อมูลบุคคลที่แนะนำ</small></div>
+                    <div class="col-md-5 col-8"><label class="form-label form-label-sm">ชื่อ-สกุล</label><input type="text" class="form-control form-control-sm" name="col114"></div>
+                    <div class="col-md-2 col-4"><label class="form-label form-label-sm">อายุ</label><input type="number" class="form-control form-control-sm" name="col115" min="0"></div>
+                    <div class="col-md-3 col-6"><label class="form-label form-label-sm">เลขบัตรประชาชน</label><input type="text" class="form-control form-control-sm" name="col116" maxlength="13"></div>
+                    <div class="col-md-2 col-6"><label class="form-label form-label-sm">โทรศัพท์</label><input type="text" class="form-control form-control-sm" name="col117"></div>
+                    <div class="col-md-3"><label class="form-label form-label-sm">การศึกษา</label><input type="text" class="form-control form-control-sm" name="col118"></div>
+                    <div class="col-md-3"><label class="form-label form-label-sm">สถานศึกษา</label><input type="text" class="form-control form-control-sm" name="col119"></div>
+                    <div class="col-md-3"><label class="form-label form-label-sm">อาชีพ</label><input type="text" class="form-control form-control-sm" name="col120"></div>
+                    <div class="col-md-3"><label class="form-label form-label-sm">รายได้ประมาณ</label><input type="text" class="form-control form-control-sm" name="col121"></div>
+                  </div>
+                </div>
+                <div id="src71OnlineFields" class="d-none border rounded p-3 bg-light mb-2">
+                  <div class="row g-2">
+                    <div class="col-12"><small class="fw-bold text-secondary">ข้อมูลสื่อออนไลน์</small></div>
+                    <div class="col-md-4"><label class="form-label form-label-sm">แพลตฟอร์ม</label><select class="form-select form-select-sm" name="col122"><option value="">-- เลือก --</option><option>Facebook</option><option>LINE</option><option>TikTok</option><option>Instagram</option><option>X (Twitter)</option><option>Telegram</option><option>Google</option></select></div>
+                    <div class="col-md-4"><label class="form-label form-label-sm">URL ผู้ใช้/เพจ</label><input type="text" class="form-control form-control-sm" name="col123"></div>
+                    <div class="col-md-4"><label class="form-label form-label-sm">ชื่อผู้ใช้/เพจ</label><input type="text" class="form-control form-control-sm" name="col124"></div>
+                    <div class="col-md-3"><label class="form-label form-label-sm">จำนวนผู้ติดตาม</label><input type="text" class="form-control form-control-sm" name="col125"></div>
+                    <div class="col-md-5"><label class="form-label form-label-sm">URL ที่โพสต์</label><input type="text" class="form-control form-control-sm" name="col126"></div>
+                    <div class="col-md-4"><label class="form-label form-label-sm">วันที่โพสต์</label><input type="date" class="form-control form-control-sm" name="col127"></div>
+                    <div class="col-12 text-muted small fst-italic"><i class="fas fa-camera me-1"></i> รูปโพสต์/โปรไฟล์ → บันทึกในหมวด source_profile_71 / source_post_71</div>
+                  </div>
+                </div>
+                <div id="src71OtherFields" class="d-none border rounded p-3 bg-light mb-2">
+                  <label class="form-label form-label-sm">รายละเอียด</label>
+                  <textarea class="form-control form-control-sm" name="col128" rows="2"></textarea>
+                </div>
               </div>
-              <div class="col-md-8 mb-3"><label class="form-label">ระบุรายละเอียด (ถ้าเคย)</label><input type="text" class="form-control" name="col31"></div>
-              <div class="col-12 mb-3"><label class="form-label">11. ได้ยื่นถวายฎีกาที่อื่น/จุดใด ก่อนเดินทางมา สน. หรือไม่</label><input type="text" class="form-control" name="col32"></div>
-              <div class="col-12 mb-3"><label class="form-label">12. เคยเดินทางมายื่นถวายฎีกาที่อื่น นอกจากพระบรมมหาราชวัง หรือไม่</label><input type="text" class="form-control" name="col33"></div>
-              <div class="col-12 mb-3"><label class="form-label">13. กรณีมาติดตามเรื่องเดิม มีหลักฐานความคืบหน้าหรือไม่</label><input type="text" class="form-control" name="col34"></div>
-              <div class="col-12 mb-3"><label class="form-label">อื่นๆ (หมายเหตุ)</label><textarea class="form-control" name="col35" rows="2"></textarea></div>
+              <!-- 7.2 -->
+              <div class="col-12">
+                <label class="form-label fw-semibold">7.2 ทราบจากที่ใดว่า วันนี้ จะมีขบวนเสด็จฯ</label>
+                <div class="d-flex gap-3 flex-wrap mb-2">
+                  <div class="form-check"><input class="form-check-input" type="radio" name="col29" id="src72Person" value="บุคคลแนะนำ" onchange="onSource72Change()"><label class="form-check-label" for="src72Person">บุคคลแนะนำ</label></div>
+                  <div class="form-check"><input class="form-check-input" type="radio" name="col29" id="src72Online" value="แพลตฟอร์มสื่อออนไลน์" onchange="onSource72Change()"><label class="form-check-label" for="src72Online">แพลตฟอร์มสื่อออนไลน์</label></div>
+                  <div class="form-check"><input class="form-check-input" type="radio" name="col29" id="src72Other" value="อื่น ๆ" onchange="onSource72Change()"><label class="form-check-label" for="src72Other">อื่น ๆ</label></div>
+                </div>
+                <div id="src72PersonFields" class="d-none border rounded p-3 bg-light mb-2">
+                  <div class="row g-2">
+                    <div class="col-12"><small class="fw-bold text-secondary">ข้อมูลบุคคลที่แนะนำ</small></div>
+                    <div class="col-md-5 col-8"><label class="form-label form-label-sm">ชื่อ-สกุล</label><input type="text" class="form-control form-control-sm" name="col129"></div>
+                    <div class="col-md-2 col-4"><label class="form-label form-label-sm">อายุ</label><input type="number" class="form-control form-control-sm" name="col130" min="0"></div>
+                    <div class="col-md-3 col-6"><label class="form-label form-label-sm">เลขบัตรประชาชน</label><input type="text" class="form-control form-control-sm" name="col131" maxlength="13"></div>
+                    <div class="col-md-2 col-6"><label class="form-label form-label-sm">โทรศัพท์</label><input type="text" class="form-control form-control-sm" name="col132"></div>
+                    <div class="col-md-3"><label class="form-label form-label-sm">การศึกษา</label><input type="text" class="form-control form-control-sm" name="col133"></div>
+                    <div class="col-md-3"><label class="form-label form-label-sm">สถานศึกษา</label><input type="text" class="form-control form-control-sm" name="col134"></div>
+                    <div class="col-md-3"><label class="form-label form-label-sm">อาชีพ</label><input type="text" class="form-control form-control-sm" name="col135"></div>
+                    <div class="col-md-3"><label class="form-label form-label-sm">รายได้ประมาณ</label><input type="text" class="form-control form-control-sm" name="col136"></div>
+                  </div>
+                </div>
+                <div id="src72OnlineFields" class="d-none border rounded p-3 bg-light mb-2">
+                  <div class="row g-2">
+                    <div class="col-12"><small class="fw-bold text-secondary">ข้อมูลสื่อออนไลน์</small></div>
+                    <div class="col-md-4"><label class="form-label form-label-sm">แพลตฟอร์ม</label><select class="form-select form-select-sm" name="col137"><option value="">-- เลือก --</option><option>Facebook</option><option>LINE</option><option>TikTok</option><option>Instagram</option><option>X (Twitter)</option><option>Telegram</option><option>Google</option></select></div>
+                    <div class="col-md-4"><label class="form-label form-label-sm">URL ผู้ใช้/เพจ</label><input type="text" class="form-control form-control-sm" name="col138"></div>
+                    <div class="col-md-4"><label class="form-label form-label-sm">ชื่อผู้ใช้/เพจ</label><input type="text" class="form-control form-control-sm" name="col139"></div>
+                    <div class="col-md-3"><label class="form-label form-label-sm">จำนวนผู้ติดตาม</label><input type="text" class="form-control form-control-sm" name="col140"></div>
+                    <div class="col-md-5"><label class="form-label form-label-sm">URL ที่โพสต์</label><input type="text" class="form-control form-control-sm" name="col141"></div>
+                    <div class="col-md-4"><label class="form-label form-label-sm">วันที่โพสต์</label><input type="date" class="form-control form-control-sm" name="col142"></div>
+                    <div class="col-12 text-muted small fst-italic"><i class="fas fa-camera me-1"></i> รูปโพสต์/โปรไฟล์ → บันทึกในหมวด source_profile_72 / source_post_72</div>
+                  </div>
+                </div>
+                <div id="src72OtherFields" class="d-none border rounded p-3 bg-light mb-2">
+                  <label class="form-label form-label-sm">รายละเอียด</label>
+                  <textarea class="form-control form-control-sm" name="col143" rows="2"></textarea>
+                </div>
+              </div>
+              <!-- 7.3 -->
+              <div class="col-12">
+                <label class="form-label fw-semibold">7.3 ความตั้งใจในวันนี้ เริ่มจากการเดินทางมาจากที่ใด จนกระทั่งมาพบ จนท. และพบ จนท.ได้อย่างไร</label>
+                <textarea class="form-control" name="col28" rows="3"></textarea>
+              </div>
+              <!-- 7.4 -->
+              <div class="col-12">
+                <label class="form-label fw-semibold">7.4 เคยเดินทางมายื่นถวายฎีกา ที่พระบรมมหาราชวังหรือไม่ อย่างไร</label>
+                <div class="d-flex gap-4 mb-2">
+                  <div class="form-check"><input class="form-check-input" type="radio" name="col30" id="palaceNever" value="ไม่เคย" checked onchange="onPalaceVisitChange()"><label class="form-check-label" for="palaceNever">ไม่เคย</label></div>
+                  <div class="form-check"><input class="form-check-input" type="radio" name="col30" id="palaceYes" value="เคย" onchange="onPalaceVisitChange()"><label class="form-check-label" for="palaceYes">เคย</label></div>
+                </div>
+                <div id="palaceVisitFields" class="d-none border rounded p-3 bg-light">
+                  <div class="row g-2">
+                    <div class="col-md-2 col-4"><label class="form-label form-label-sm">จำนวน (ครั้ง)</label><input type="number" class="form-control form-control-sm" name="col144" min="1"></div>
+                    <div class="col-md-10 col-8"><label class="form-label form-label-sm">รายละเอียด</label><input type="text" class="form-control form-control-sm" name="col31"></div>
+                    <div class="col-md-3 col-6"><label class="form-label form-label-sm">ครั้งที่ 1 วันที่</label><input type="date" class="form-control form-control-sm" name="col145"></div>
+                    <div class="col-md-3 col-6"><label class="form-label form-label-sm">ครั้งที่ 2 วันที่</label><input type="date" class="form-control form-control-sm" name="col146"></div>
+                    <div class="col-md-3 col-6"><label class="form-label form-label-sm">ครั้งที่ 3 วันที่</label><input type="date" class="form-control form-control-sm" name="col147"></div>
+                    <div class="col-md-3 col-6"><label class="form-label form-label-sm">ครั้งที่ 4 วันที่</label><input type="date" class="form-control form-control-sm" name="col148"></div>
+                    <div class="col-12 mt-1">
+                      <label class="form-label form-label-sm">มาส่งเอกสารเพิ่มเติม</label>
+                      <select class="form-select form-select-sm" name="col149" onchange="onDocSubmitChange(this)" style="max-width:200px;">
+                        <option value="">-- ไม่มี / ไม่ระบุ --</option>
+                        <option value="มา">มา</option>
+                      </select>
+                    </div>
+                    <div id="docSubmitFields" class="col-12 d-none">
+                      <div class="row g-2">
+                        <div class="col-md-4"><label class="form-label form-label-sm">ครั้งที่แล้วมายื่นเอกสารเมื่อวันที่</label><input type="date" class="form-control form-control-sm" name="col150"></div>
+                        <div class="col-md-8"><label class="form-label form-label-sm">รายละเอียด</label><input type="text" class="form-control form-control-sm" name="col151"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- 7.5-7.9 -->
+              <div class="col-12"><label class="form-label fw-semibold">7.5 ได้ยื่นถวายฎีกาที่อื่น/จุดใด ก่อนเดินทางมา สน.พระราชวัง หรือไม่ อย่างไร</label><input type="text" class="form-control" name="col32"></div>
+              <div class="col-12"><label class="form-label fw-semibold">7.6 เคยเดินทางมายื่นถวายฎีกาที่อื่น นอกจากพระบรมมหาราชวัง หรือไม่ อย่างไร</label><input type="text" class="form-control" name="col33"></div>
+              <div class="col-12"><label class="form-label fw-semibold">7.7 กรณีมาติดตามเรื่องเดิม มีหลักฐานเอกสาร/ความคืบหน้า หรือไม่ อย่างไร</label><input type="text" class="form-control" name="col34"></div>
+              <div class="col-12"><label class="form-label fw-semibold">7.8 อื่น ๆ</label><textarea class="form-control" name="col35" rows="2"></textarea></div>
+              <div class="col-12"><label class="form-label fw-semibold">7.9 เมื่อยื่นถวายฎีกาเสร็จแล้ว จะเดินทางไปที่ใดต่อ</label><input type="text" class="form-control" name="col152"></div>
             </div>
           </div>
         </div>
 
-        <!-- Form Action Buttons -->
-        <div class="d-grid gap-2 mb-2" style="max-width: 900px; margin: 0 auto;">
-          <button type="submit" class="btn btn-primary btn-lg shadow" id="submitBtn">
-            <i class="fas fa-save"></i> บันทึกข้อมูลเข้าฐานข้อมูล
-          </button>
-          <button type="button" class="btn btn-outline-secondary btn-lg d-none" id="cancelEditBtn" onclick="cancelEdit()">
-            <i class="fas fa-arrow-left"></i> ยกเลิก / กลับไป Dashboard
-          </button>
+        <!-- Buttons -->
+        <div class="d-grid gap-2 mb-2" style="max-width: 960px; margin: 0 auto;">
+          <button type="submit" class="btn btn-primary btn-lg shadow" id="submitBtn"><i class="fas fa-save"></i> บันทึกข้อมูลเข้าฐานข้อมูล</button>
+          <button type="button" class="btn btn-outline-secondary btn-lg d-none" id="cancelEditBtn" onclick="cancelEdit()"><i class="fas fa-arrow-left"></i> ยกเลิก / กลับไป Dashboard</button>
         </div>
       </form>
     </div>
@@ -1148,126 +1364,127 @@
 
       document.getElementById('detailModalTitle').textContent = 'ข้อมูล: ' + (row[3] || '') + ' ' + (row[4] || '');
 
+      const v = (idx) => (row[idx] || '-').toString().replace(/^'/, '');
+      const addrBlock = (indices) => {
+        const [no,mu,soi,rd,tam,amp,prov,stn] = indices;
+        const r2 = row;
+        const parts = [
+          no  !== undefined && r2[no]  ? '<div class="col-6 col-md-3"><small class="text-muted">บ้านเลขที่</small><div class="detail-value mb-1">' + r2[no]  + '</div></div>' : '',
+          mu  !== undefined && r2[mu]  ? '<div class="col-6 col-md-3"><small class="text-muted">หมู่ที่</small><div class="detail-value mb-1">'    + r2[mu]  + '</div></div>' : '',
+          soi !== undefined && r2[soi] ? '<div class="col-6 col-md-3"><small class="text-muted">ซอย</small><div class="detail-value mb-1">'        + r2[soi] + '</div></div>' : '',
+          rd  !== undefined && r2[rd]  ? '<div class="col-6 col-md-3"><small class="text-muted">ถนน</small><div class="detail-value mb-1">'        + r2[rd]  + '</div></div>' : '',
+          tam !== undefined && r2[tam] ? '<div class="col-6 col-md-4"><small class="text-muted">ตำบล/แขวง</small><div class="detail-value mb-1">' + r2[tam] + '</div></div>' : '',
+          amp !== undefined && r2[amp] ? '<div class="col-6 col-md-4"><small class="text-muted">อำเภอ/เขต</small><div class="detail-value mb-1">' + r2[amp] + '</div></div>' : '',
+          prov!== undefined && r2[prov]? '<div class="col-6 col-md-4"><small class="text-muted">จังหวัด</small><div class="detail-value mb-1">'    + r2[prov]+ '</div></div>' : '',
+          stn !== undefined && r2[stn] ? '<div class="col-12"><small class="text-muted">สน.พื้นที่</small><div class="detail-value mb-1">'         + r2[stn] + '</div></div>' : '',
+        ].join('');
+        return parts ? '<div class="row g-1 mt-1">' + parts + '</div>' : '<div class="detail-value">-</div>';
+      };
+
       document.getElementById('detailModalBody').innerHTML =
+        // S1
         '<div class="card p-3 mb-3 border-0 shadow-sm">' +
-          '<div class="detail-section-title"><i class="fas fa-user"></i> 1. ข้อมูลส่วนตัวเบื้องต้น</div>' +
+          '<div class="detail-section-title"><i class="fas fa-calendar-alt"></i> 1. วัน/เดือน/ปี/หมายเสด็จ</div>' +
           '<div class="row">' +
-            '<div class="col-md-6"><div class="detail-label">วันเดือนปี:</div><div class="detail-value">' + (row[1]||'-') + '</div></div>' +
-            '<div class="col-md-6"><div class="detail-label">เวลาประมาณ:</div><div class="detail-value">' + (row[2]||'-') + '</div></div>' +
-            '<div class="col-md-6"><div class="detail-label">ชื่อ - สกุล:</div><div class="detail-value">' + (row[3]||'') + ' ' + (row[4]||'-') + '</div></div>' +
-            '<div class="col-md-6"><div class="detail-label">อายุ:</div><div class="detail-value">' + (row[5] ? row[5]+' ปี' : '-') + '</div></div>' +
-            '<div class="col-md-6"><div class="detail-label">เลขบัตร ปชช:</div><div class="detail-value">' + idCard + '</div></div>' +
-            '<div class="col-md-6"><div class="detail-label">เบอร์โทร:</div><div class="detail-value">' + phone1 + '</div></div>' +
-            '<div class="col-12">' +
-              '<div class="detail-label">ที่อยู่ปัจจุบัน:</div>' +
-              (row[7] ? '<div class="text-muted fst-italic mb-1" style="font-size:0.85rem;">' + row[7] + '</div>' : '') +
-              ((row[63]||row[64]||row[65]||row[66]||row[67]||row[68]||row[69]||row[70]) ?
-                '<div class="row g-1">' +
-                (row[63] ? '<div class="col-6 col-md-3"><small class="text-muted">บ้านเลขที่</small><div class="detail-value mb-1">' + row[63] + '</div></div>' : '') +
-                (row[64] ? '<div class="col-6 col-md-3"><small class="text-muted">หมู่ที่</small><div class="detail-value mb-1">' + row[64] + '</div></div>' : '') +
-                (row[65] ? '<div class="col-6 col-md-3"><small class="text-muted">ซอย</small><div class="detail-value mb-1">' + row[65] + '</div></div>' : '') +
-                (row[66] ? '<div class="col-6 col-md-3"><small class="text-muted">ถนน</small><div class="detail-value mb-1">' + row[66] + '</div></div>' : '') +
-                (row[67] ? '<div class="col-6 col-md-4"><small class="text-muted">ตำบล/แขวง</small><div class="detail-value mb-1">' + row[67] + '</div></div>' : '') +
-                (row[68] ? '<div class="col-6 col-md-4"><small class="text-muted">อำเภอ/เขต</small><div class="detail-value mb-1">' + row[68] + '</div></div>' : '') +
-                (row[69] ? '<div class="col-6 col-md-4"><small class="text-muted">จังหวัด</small><div class="detail-value mb-1">' + row[69] + '</div></div>' : '') +
-                (row[70] ? '<div class="col-12"><small class="text-muted">สน.พื้นที่</small><div class="detail-value mb-1">' + row[70] + '</div></div>' : '') +
-                '</div>'
-              : (!row[7] ? '<div class="detail-value">-</div>' : '')) +
-            '</div>' +
-            '<div class="col-12">' +
-              '<div class="detail-label">ที่อยู่ภูมิลำเนา:</div>' +
-              (row[37] ? '<div class="text-muted fst-italic mb-1" style="font-size:0.85rem;">' + row[37] + '</div>' : '') +
-              ((row[71]||row[72]||row[73]||row[74]||row[75]||row[76]||row[77]||row[78]) ?
-                '<div class="row g-1">' +
-                (row[71] ? '<div class="col-6 col-md-3"><small class="text-muted">บ้านเลขที่</small><div class="detail-value mb-1">' + row[71] + '</div></div>' : '') +
-                (row[72] ? '<div class="col-6 col-md-3"><small class="text-muted">หมู่ที่</small><div class="detail-value mb-1">' + row[72] + '</div></div>' : '') +
-                (row[73] ? '<div class="col-6 col-md-3"><small class="text-muted">ซอย</small><div class="detail-value mb-1">' + row[73] + '</div></div>' : '') +
-                (row[74] ? '<div class="col-6 col-md-3"><small class="text-muted">ถนน</small><div class="detail-value mb-1">' + row[74] + '</div></div>' : '') +
-                (row[75] ? '<div class="col-6 col-md-4"><small class="text-muted">ตำบล/แขวง</small><div class="detail-value mb-1">' + row[75] + '</div></div>' : '') +
-                (row[76] ? '<div class="col-6 col-md-4"><small class="text-muted">อำเภอ/เขต</small><div class="detail-value mb-1">' + row[76] + '</div></div>' : '') +
-                (row[77] ? '<div class="col-6 col-md-4"><small class="text-muted">จังหวัด</small><div class="detail-value mb-1">' + row[77] + '</div></div>' : '') +
-                (row[78] ? '<div class="col-12"><small class="text-muted">สน.พื้นที่</small><div class="detail-value mb-1">' + row[78] + '</div></div>' : '') +
-                '</div>'
-              : (!row[37] ? '<div class="detail-value">-</div>' : '')) +
-            '</div>' +
+            '<div class="col-md-4"><div class="detail-label">วันที่:</div><div class="detail-value">' + v(1) + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">เวลา:</div><div class="detail-value">' + v(2) + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">หมายเสด็จ:</div><div class="detail-value">' + v(41) + (row[42] ? ' — ' + row[42] : '') + '</div></div>' +
           '</div>' +
         '</div>' +
-
+        // S2
         '<div class="card p-3 mb-3 border-0 shadow-sm">' +
-          '<div class="detail-section-title text-success" style="border-color:#198754"><i class="fas fa-eye"></i> 2. การตรวจสอบและสังเกตเบื้องต้น</div>' +
+          '<div class="detail-section-title text-primary" style="border-color:#0d6efd"><i class="fas fa-search-location"></i> 2. ข้อมูลการตรวจพบและการนำส่ง</div>' +
           '<div class="row">' +
-            '<div class="col-md-4"><div class="detail-label">1. การแต่งกาย:</div><div class="detail-value">' + (row[9]||'-') + '</div></div>' +
-            '<div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">' + (row[10]||'-') + '</div></div>' +
-            '<div class="col-md-4"><div class="detail-label">2. กระเป๋า/อุปกรณ์:</div><div class="detail-value">' + (row[11]||'-') + '</div></div>' +
-            '<div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">' + (row[12]||'-') + '</div></div>' +
-            '<div class="col-md-4"><div class="detail-label">3. การพูดคุยรู้เรื่อง:</div><div class="detail-value">' + (row[13]||'-') + '</div></div>' +
-            '<div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">' + (row[14]||'-') + '</div></div>' +
-            '<div class="col-md-4"><div class="detail-label">4. เคยมารับเสด็จหรือไม่:</div><div class="detail-value">' + (row[15]||'-') + '</div></div>' +
-            '<div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">' + (row[16]||'-') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">สถานที่ตรวจพบ:</div><div class="detail-value">' + v(43) + (row[44] ? ' — ' + row[44] : '') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">วันที่ตรวจพบ:</div><div class="detail-value">' + v(45) + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">เวลา:</div><div class="detail-value">' + v(46) + '</div></div>' +
+            '<div class="col-md-3"><div class="detail-label">ยศ:</div><div class="detail-value">' + v(47) + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">ชื่อเจ้าหน้าที่:</div><div class="detail-value">' + v(48) + '</div></div>' +
+            '<div class="col-md-3"><div class="detail-label">โทรศัพท์:</div><div class="detail-value">' + fixMissingZero(row[49],'phone') + '</div></div>' +
+            '<div class="col-md-2"><div class="detail-label">ตำแหน่ง:</div><div class="detail-value">' + v(93) + '</div></div>' +
           '</div>' +
         '</div>' +
-
+        // S3
         '<div class="card p-3 mb-3 border-0 shadow-sm">' +
-          '<div class="detail-section-title text-danger" style="border-color:#dc3545"><i class="fas fa-file-alt"></i> 3. รายละเอียดเรื่องร้องเรียน</div>' +
+          '<div class="detail-section-title text-warning" style="border-color:#ffc107"><i class="fas fa-box-open"></i> 3. จุดที่อยู่สิ่งของและสิ่งของที่นำมายื่นฯ</div>' +
           '<div class="row">' +
-            '<div class="col-12"><div class="detail-label">1. เป็นเรื่องอะไร โดยสังเขป:</div><div class="detail-value">' + (row[17]||'-') + '</div></div>' +
-            '<div class="col-12"><div class="detail-label">สถานที่เกิดเรื่อง:</div>' +
-              '<div class="row g-1 mt-1">' +
-              (row[79] ? '<div class="col-6 col-md-3"><small class="text-muted">บ้านเลขที่</small><div class="detail-value mb-1">' + row[79] + '</div></div>' : '') +
-              (row[80] ? '<div class="col-6 col-md-3"><small class="text-muted">หมู่ที่</small><div class="detail-value mb-1">' + row[80] + '</div></div>' : '') +
-              (row[81] ? '<div class="col-6 col-md-3"><small class="text-muted">ซอย</small><div class="detail-value mb-1">' + row[81] + '</div></div>' : '') +
-              (row[82] ? '<div class="col-6 col-md-3"><small class="text-muted">ถนน</small><div class="detail-value mb-1">' + row[82] + '</div></div>' : '') +
-              '<div class="col-md-4"><small class="text-muted">จังหวัด</small><div class="detail-value mb-1">' + (row[38]||'-') + '</div></div>' +
-              '<div class="col-md-4"><small class="text-muted">อำเภอ/เขต</small><div class="detail-value mb-1">' + (row[39]||'-') + '</div></div>' +
-              '<div class="col-md-4"><small class="text-muted">ตำบล/แขวง</small><div class="detail-value mb-1">' + (row[40]||'-') + '</div></div>' +
-              (row[83] ? '<div class="col-12"><small class="text-muted">สน.พื้นที่</small><div class="detail-value mb-1">' + row[83] + '</div></div>' : '') +
-              '</div></div>' +
-            '<div class="col-md-6"><div class="detail-label">2. ประเภทของเรื่องที่ยื่น:</div><div class="detail-value">' + (row[35]||'-') + '</div></div>' +
-            '<div class="col-md-6"><div class="detail-label">3. สาเหตุของเรื่องที่ยื่น:</div><div class="detail-value">' + (row[36]||'-') + '</div></div>' +
-            '<div class="col-md-4"><div class="detail-label">4. เคยยื่นร้องเรียนหน่วยใด:</div><div class="detail-value">' + (row[18]||'-') + '</div></div>' +
-            '<div class="col-md-8"><div class="detail-label">ระบุ (หน่วยใด/ผลอย่างไร):</div><div class="detail-value">' + (row[19]||'-') + '</div></div>' +
-            '<div class="col-md-6"><div class="detail-label">5. ทราบเรื่องจากที่ใด:</div><div class="detail-value">' + (row[20]||'-') + '</div></div>' +
-            '<div class="col-md-6"><div class="detail-label">6. เดินทางมาจากจังหวัดใด:</div><div class="detail-value">' + (row[21]||'-') + '</div></div>' +
-            '<div class="col-md-6"><div class="detail-label">7. สถานที่พักในกรุงเทพฯ:</div>' +
-              (row[22] ? '<div class="text-muted fst-italic mb-1" style="font-size:0.85rem;">' + row[22] + '</div>' : '') +
+            '<div class="col-md-4"><div class="detail-label">การเก็บ/ตำแหน่ง:</div><div class="detail-value">' + v(52) + (row[53] ? ' — ' + row[53] : '') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">ลักษณะการนำพา:</div><div class="detail-value">' + v(54) + (row[94] ? ' — ' + row[94] : '') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">บรรจุภัณฑ์:</div><div class="detail-value">' + v(55) +
+              (row[95] || row[96] ? ' (' + [row[95]||'',row[96]||''].filter(Boolean).join('×') + ' ซม.)' : '') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">ซองเอกสาร:</div><div class="detail-value">' + v(56) +
+              (row[98] || row[99] ? ' (' + [row[98]||'',row[99]||''].filter(Boolean).join('×') + ' ซม.)' : '') + '</div></div>' +
+          '</div>' +
+        '</div>' +
+        // S4
+        '<div class="card p-3 mb-3 border-0 shadow-sm">' +
+          '<div class="detail-section-title text-danger" style="border-color:#dc3545"><i class="fas fa-user-circle"></i> 4. ข้อมูลส่วนตัวของผู้ถวายฎีกา</div>' +
+          '<div class="row">' +
+            '<div class="col-md-6"><div class="detail-label">ชื่อ - สกุล:</div><div class="detail-value">' + v(3) + ' ' + v(4) + '</div></div>' +
+            '<div class="col-md-2"><div class="detail-label">อายุ:</div><div class="detail-value">' + (row[5] ? row[5]+' ปี' : '-') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">บัตร ปชช:</div><div class="detail-value">' + idCard + '</div></div>' +
+            '<div class="col-md-3"><div class="detail-label">โทรศัพท์:</div><div class="detail-value">' + phone1 + '</div></div>' +
+            '<div class="col-md-3"><div class="detail-label">การศึกษา:</div><div class="detail-value">' + v(101) + '</div></div>' +
+            '<div class="col-md-3"><div class="detail-label">อาชีพ:</div><div class="detail-value">' + v(103) + '</div></div>' +
+            '<div class="col-md-3"><div class="detail-label">รายได้:</div><div class="detail-value">' + v(104) + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">บิดา:</div><div class="detail-value">' + v(105) + (row[106] ? ' / ' + fixMissingZero(row[106],'phone') : '') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">มารดา:</div><div class="detail-value">' + v(107) + (row[108] ? ' / ' + fixMissingZero(row[108],'phone') : '') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">ผู้ปกครอง:</div><div class="detail-value">' + v(109) + (row[110] ? ' / ' + fixMissingZero(row[110],'phone') : '') + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">ที่อยู่ปัจจุบัน:</div>' + addrBlock([63,64,65,66,67,68,69,70]) + '</div>' +
+            '<div class="col-12"><div class="detail-label">ที่อยู่ภูมิลำเนา:</div>' + addrBlock([71,72,73,74,75,76,77,78]) + '</div>' +
+            '<div class="col-md-4"><div class="detail-label">ติดต่อสำรอง:</div><div class="detail-value">' + v(24) + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">เกี่ยวข้องเป็น:</div><div class="detail-value">' + v(25) + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">เบอร์สำรอง:</div><div class="detail-value">' + phone2 + '</div></div>' +
+          '</div>' +
+        '</div>' +
+        // S5
+        '<div class="card p-3 mb-3 border-0 shadow-sm">' +
+          '<div class="detail-section-title text-success" style="border-color:#198754"><i class="fas fa-eye"></i> 5. การตรวจสอบและการสังเกตเบื้องต้น</div>' +
+          '<div class="row">' +
+            '<div class="col-md-4"><div class="detail-label">การแต่งกาย:</div><div class="detail-value">' + v(9) + (row[10] ? ' — ' + row[10] : '') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">การสนทนา:</div><div class="detail-value">' + v(13) + (row[14] ? ' — ' + row[14] : '') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">เคยมารับเสด็จ:</div><div class="detail-value">' + v(15) + (row[111] ? ' (' + row[111] + ' ครั้ง)' : '') + (row[16] ? ' — ' + row[16] : '') + '</div></div>' +
+          '</div>' +
+        '</div>' +
+        // S6
+        '<div class="card p-3 mb-3 border-0 shadow-sm">' +
+          '<div class="detail-section-title" style="border-color:#055160;color:#055160"><i class="fas fa-file-alt"></i> 6. รายละเอียดเรื่องที่ถวายฎีกา</div>' +
+          '<div class="row">' +
+            '<div class="col-md-4"><div class="detail-label">ประเภทการยื่น:</div><div class="detail-value">' + v(112) + '</div></div>' +
+            '<div class="col-md-8"><div class="detail-label">เรื่องโดยสังเขป:</div><div class="detail-value">' + v(17) + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">ประเภทของเรื่อง:</div><div class="detail-value">' + v(35) + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">สาเหตุ:</div><div class="detail-value">' + v(36) + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">สถานที่เกิดเรื่อง:</div>' + addrBlock([79,80,81,82,undefined,undefined,38,83]) +
+              '<div class="row g-1 mt-1"><div class="col-4"><small class="text-muted">จังหวัด</small><div class="detail-value mb-1">' + v(38) + '</div></div>' +
+              '<div class="col-4"><small class="text-muted">อำเภอ/เขต</small><div class="detail-value mb-1">' + v(39) + '</div></div>' +
+              '<div class="col-4"><small class="text-muted">ตำบล/แขวง</small><div class="detail-value mb-1">' + v(40) + '</div></div></div>' +
+            '</div>' +
+            '<div class="col-md-4"><div class="detail-label">เคยยื่นมาก่อน:</div><div class="detail-value">' + v(18) + (row[19] ? ' — ' + row[19] : '') + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">เดินทางจากจังหวัด:</div><div class="detail-value">' + v(21) + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">ยานพาหนะ:</div><div class="detail-value">' + v(23) + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">สถานที่พัก กทม:</div>' +
               (row[84] ? '<div class="detail-value mb-1">' + row[84] + '</div>' : '') +
-              ((row[85]||row[91]) ?
-                '<div class="row g-1">' +
-                (row[85] ? '<div class="col-6"><small class="text-muted">บ้านเลขที่</small><div class="detail-value mb-1">' + row[85] + '</div></div>' : '') +
-                (row[86] ? '<div class="col-6"><small class="text-muted">หมู่ที่</small><div class="detail-value mb-1">' + row[86] + '</div></div>' : '') +
-                (row[87] ? '<div class="col-6"><small class="text-muted">ซอย</small><div class="detail-value mb-1">' + row[87] + '</div></div>' : '') +
-                (row[88] ? '<div class="col-6"><small class="text-muted">ถนน</small><div class="detail-value mb-1">' + row[88] + '</div></div>' : '') +
-                (row[89] ? '<div class="col-12"><small class="text-muted">ตำบล/แขวง</small><div class="detail-value mb-1">' + row[89] + '</div></div>' : '') +
-                (row[90] ? '<div class="col-6"><small class="text-muted">อำเภอ/เขต</small><div class="detail-value mb-1">' + row[90] + '</div></div>' : '') +
-                (row[91] ? '<div class="col-6"><small class="text-muted">จังหวัด</small><div class="detail-value mb-1">' + row[91] + '</div></div>' : '') +
-                (row[92] ? '<div class="col-12"><small class="text-muted">สน.พื้นที่</small><div class="detail-value mb-1">' + row[92] + '</div></div>' : '') +
-                '</div>'
-              : (!row[22] && !row[84] ? '<div class="detail-value">-</div>' : '')) +
+              addrBlock([85,86,87,88,89,90,91,92]) +
             '</div>' +
-            '<div class="col-md-6"><div class="detail-label">8. ใช้ยานพาหนะอะไร:</div><div class="detail-value">' + (row[23]||'-') + '</div></div>' +
           '</div>' +
         '</div>' +
-
-        '<div class="card p-3 mb-3 border-0 shadow-sm">' +
-          '<div class="detail-section-title text-warning" style="border-color:#ffc107"><i class="fas fa-address-book"></i> 4. บุคคลที่สามารถติดต่อได้</div>' +
-          '<div class="row">' +
-            '<div class="col-md-4"><div class="detail-label">7. ชื่อ - สกุล:</div><div class="detail-value">' + (row[24]||'-') + '</div></div>' +
-            '<div class="col-md-4"><div class="detail-label">เกี่ยวข้องเป็น:</div><div class="detail-value">' + (row[25]||'-') + '</div></div>' +
-            '<div class="col-md-4"><div class="detail-label">เบอร์โทร:</div><div class="detail-value">' + phone2 + '</div></div>' +
-          '</div>' +
-        '</div>' +
-
+        // S7
         '<div class="card p-3 border-0 shadow-sm">' +
-          '<div class="detail-section-title text-info" style="border-color:#0dcaf0"><i class="fas fa-search"></i> 5. ข้อมูลเชิงลึก</div>' +
+          '<div class="detail-section-title text-info" style="border-color:#0dcaf0"><i class="fas fa-user-secret"></i> 7. การซักถามข้อมูลเชิงลึก</div>' +
           '<div class="row">' +
-            '<div class="col-12"><div class="detail-label">8. ความตั้งใจในวันนี้:</div><div class="detail-value">' + (row[27]||'-') + '</div></div>' +
-            '<div class="col-12"><div class="detail-label">9. ทราบจากที่ใดว่าวันนี้จะมีขบวนเสด็จฯ:</div><div class="detail-value">' + (row[28]||'-') + '</div></div>' +
-            '<div class="col-md-4"><div class="detail-label">10. เคยเดินทางมายื่นถวายฎีกาที่นี่หรือไม่:</div><div class="detail-value">' + (row[29]||'-') + '</div></div>' +
-            '<div class="col-md-8"><div class="detail-label">ระบุรายละเอียด:</div><div class="detail-value">' + (row[30]||'-') + '</div></div>' +
-            '<div class="col-12"><div class="detail-label">11. ได้ยื่นถวายฎีกาที่อื่น ก่อนเดินทางมา สน. หรือไม่:</div><div class="detail-value">' + (row[31]||'-') + '</div></div>' +
-            '<div class="col-12"><div class="detail-label">12. เคยเดินทางมายื่นถวายฎีกาที่อื่น นอกจากพระบรมมหาราชวัง หรือไม่:</div><div class="detail-value">' + (row[32]||'-') + '</div></div>' +
-            '<div class="col-12"><div class="detail-label">13. กรณีมาติดตามเรื่องเดิม มีหลักฐานความคืบหน้าหรือไม่:</div><div class="detail-value">' + (row[33]||'-') + '</div></div>' +
-            '<div class="col-12"><div class="detail-label">อื่นๆ (หมายเหตุ):</div><div class="detail-value">' + (row[34]||'-') + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">7.1 แหล่งข้อมูล (บุคคล/ออนไลน์):</div><div class="detail-value">' + v(20) +
+              (row[113] ? ' — ชื่อ: ' + row[113] : '') + '</div></div>' +
+            '<div class="col-md-6"><div class="detail-label">7.2 แหล่งข้อมูล 2:</div><div class="detail-value">' + v(28) +
+              (row[128] ? ' — ชื่อ: ' + row[128] : '') + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">7.3 ความตั้งใจในวันนี้:</div><div class="detail-value">' + v(27) + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">7.4 เคยยื่นพระบรมมหาราชวัง:</div><div class="detail-value">' + v(29) +
+              (row[143] ? ' (' + row[143] + ' ครั้ง)' : '') + '</div></div>' +
+            '<div class="col-md-8"><div class="detail-label">รายละเอียด:</div><div class="detail-value">' + v(30) + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">7.5 ยื่นที่อื่นก่อน สน.พระราชวัง:</div><div class="detail-value">' + v(31) + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">7.6 ยื่นถวายฎีกาที่อื่นนอกจากพระบรมมหาราชวัง:</div><div class="detail-value">' + v(32) + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">7.7 กรณีติดตามเรื่องเดิม มีหลักฐาน:</div><div class="detail-value">' + v(33) + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">7.8 อื่น ๆ:</div><div class="detail-value">' + v(34) + '</div></div>' +
+            '<div class="col-12"><div class="detail-label">7.9 เมื่อยื่นเสร็จจะเดินทางไป:</div><div class="detail-value">' + v(151) + '</div></div>' +
           '</div>' +
         '</div>';
 
@@ -1299,43 +1516,75 @@
 
     function populateFormForEdit(rowData) {
       const form = document.getElementById('dataForm');
-      // col2-col93 (skip col85 which is handled separately as radio buttons)
-      for (let n = 2; n <= 93; n++) {
-        if (n === 85) continue;
+      const radioSkip = new Set([21, 29, 30, 85]);
+      for (let n = 2; n <= 152; n++) {
+        if (radioSkip.has(n)) continue;
         const el = form.querySelector('[name="col' + n + '"]');
         if (!el) continue;
         let val = (rowData[n - 1] || '').toString().replace(/^'/, '');
-        if (el.tagName === 'SELECT') {
-          el.value = val;
-        } else if (el.type === 'date') {
+        if (el.type === 'date') {
           el.value = parseDateForInput(val);
         } else {
           el.value = val;
         }
       }
-      // Handle Bangkok stay radio (col85, rowData index 84)
-      const bangkokStatus = (rowData[84] || '').toString().trim();
-      const bangkokYes    = document.getElementById('bangkokStayYes');
-      const bangkokNo     = document.getElementById('bangkokStayNo');
-      if (bangkokYes && bangkokNo) {
-        if (bangkokStatus === 'มีสถานที่พัก') {
-          bangkokYes.checked = true;
-        } else {
-          bangkokNo.checked = true;
-        }
-        onBangkokStayToggle();
-        // Re-set bangkok province select after toggle shows the panel
-        if (bangkokStatus === 'มีสถานที่พัก') {
-          const bkProv = (rowData[91] || '').toString().replace(/^'/, '');
-          const bkEl   = document.getElementById('bangkokStayProvince');
-          if (bkEl && bkProv) { populateAddressProvinceDropdown('bangkokStayProvince'); bkEl.value = bkProv; }
-        }
+      // Restore radio: col21 (src71)
+      const src71Val = (rowData[20] || '').toString().trim();
+      if (src71Val) {
+        const r = form.querySelector('input[name="col21"][value="' + src71Val + '"]');
+        if (r) r.checked = true;
       }
-      // Restore incident location cascade (col39/40/41 = rowData index 38/39/40)
+      // Restore radio: col29 (src72)
+      const src72Val = (rowData[28] || '').toString().trim();
+      if (src72Val) {
+        const r = form.querySelector('input[name="col29"][value="' + src72Val + '"]');
+        if (r) r.checked = true;
+      }
+      // Restore radio: col30 (palace visit)
+      const palaceVal = (rowData[29] || '').toString().trim() || 'ไม่เคย';
+      const palaceEl  = form.querySelector('input[name="col30"][value="' + palaceVal + '"]');
+      if (palaceEl) palaceEl.checked = true;
+      // Restore radio: col85 (bangkok stay)
+      const bangkokStatus = (rowData[84] || '').toString().trim();
+      const bangkokYes = document.getElementById('bangkokStayYes');
+      const bangkokNo  = document.getElementById('bangkokStayNo');
+      if (bangkokStatus === 'มีสถานที่พัก') {
+        if (bangkokYes) bangkokYes.checked = true;
+      } else {
+        if (bangkokNo) bangkokNo.checked = true;
+      }
+      // Trigger all conditional panels
+      const colEl = (name) => form.querySelector('[name="' + name + '"]');
+      onNoticeStatusChange();
+      onFoundLocationChange(colEl('col44'));
+      onCarryMethodChange(colEl('col55'));
+      onEnvelopeStatusChange(colEl('col57'));
+      onClothingChange(colEl('col10'));
+      onSpeechChange(colEl('col14'));
+      onVisitedRoyalChange(colEl('col16'));
+      onPriorComplaintChange(colEl('col19'));
+      onSource71Change();
+      onSource72Change();
+      onPalaceVisitChange();
+      onDocSubmitChange(colEl('col149'));
+      onBangkokStayToggle();
+      // Restore cascading incident location (col39/40/41 = rowData idx 38/39/40)
       const province = (rowData[38] || '').toString().replace(/^'/, '');
       const amphoe   = (rowData[39] || '').toString().replace(/^'/, '');
       const tambon   = (rowData[40] || '').toString().replace(/^'/, '');
       restoreIncidentLocation(province, amphoe, tambon);
+      // Restore travelFromProvince (col22 = rowData idx 21)
+      const travelProv = (rowData[21] || '').toString().replace(/^'/, '');
+      if (travelProv) {
+        const tpEl = document.getElementById('travelFromProvince');
+        if (tpEl) tpEl.value = travelProv;
+      }
+      // Re-set bangkok province after panel is visible
+      if (bangkokStatus === 'มีสถานที่พัก') {
+        const bkProv = (rowData[91] || '').toString().replace(/^'/, '');
+        const bkEl   = document.getElementById('bangkokStayProvince');
+        if (bkEl && bkProv) { populateAddressProvinceDropdown('bangkokStayProvince'); bkEl.value = bkProv; }
+      }
     }
 
     function parseDateForInput(str) {
@@ -1415,7 +1664,7 @@
       const formObject = {};
       new FormData(form).forEach((value, key) => {
         // Prepend apostrophe to phone/ID fields to preserve leading zeros in Sheets
-        if ((key === 'col7' || key === 'col9' || key === 'col27') && value !== '') {
+        if (['col7','col9','col27','col50','col107','col109','col111','col117','col132'].includes(key) && value !== '') {
           formObject[key] = "'" + value;
         } else {
           formObject[key] = value;
@@ -1473,6 +1722,7 @@
       populateAddressProvinceDropdown('currentAddressProvince');
       populateAddressProvinceDropdown('domicileProvince');
       populateAddressProvinceDropdown('bangkokStayProvince');
+      populateAddressProvinceDropdown('travelFromProvince');
     }
 
     function populateIncidentProvinceDropdown() {
@@ -1498,6 +1748,85 @@
       if (cur) el.value = cur;
     }
 
+    // ==================== CONDITIONAL SHOW/HIDE ====================
+    function onNoticeStatusChange() {
+      const val = document.getElementById('noticeStatus');
+      const row = document.getElementById('noticeDetailRow');
+      if (!val || !row) return;
+      row.classList.toggle('d-none', val.value !== 'มีหมายเสด็จ');
+    }
+
+    function onFoundLocationChange(el) {
+      const row = document.getElementById('foundLocationDetailRow');
+      if (!row) return;
+      row.classList.toggle('d-none', !el || el.value !== 'อื่น ๆ');
+    }
+
+    function onCarryMethodChange(el) {
+      const row = document.getElementById('carryMethodDetailRow');
+      if (!row) return;
+      row.classList.toggle('d-none', !el || el.value !== 'อื่น ๆ');
+    }
+
+    function onEnvelopeStatusChange(el) {
+      const fields = document.getElementById('envelopeDetailFields');
+      if (!fields) return;
+      fields.classList.toggle('d-none', !el || el.value !== 'ใส่ซอง');
+    }
+
+    function onClothingChange(el) {
+      const row = document.getElementById('clothingDetailRow');
+      if (!row) return;
+      row.classList.toggle('d-none', !el || el.value !== 'ไม่ถูกต้อง');
+    }
+
+    function onSpeechChange(el) {
+      const row = document.getElementById('speechDetailRow');
+      if (!row) return;
+      row.classList.toggle('d-none', !el || el.value !== 'ไม่ปกติ');
+    }
+
+    function onVisitedRoyalChange(el) {
+      const row = document.getElementById('visitedRoyalDetailRow');
+      if (!row) return;
+      row.classList.toggle('d-none', !el || el.value !== 'เคย');
+    }
+
+    function onPriorComplaintChange(el) {
+      const row = document.getElementById('priorComplaintDetailRow');
+      if (!row) return;
+      row.classList.toggle('d-none', !el || el.value !== 'เคย');
+    }
+
+    function onPalaceVisitChange() {
+      const fields = document.getElementById('palaceVisitFields');
+      if (!fields) return;
+      const palaceYes = document.getElementById('palaceYes');
+      fields.classList.toggle('d-none', !(palaceYes && palaceYes.checked));
+    }
+
+    function onDocSubmitChange(el) {
+      const fields = document.getElementById('docSubmitFields');
+      if (!fields) return;
+      fields.classList.toggle('d-none', !el || el.value !== 'มา');
+    }
+
+    function onSource71Change() {
+      const r = document.querySelector('input[name="col21"]:checked');
+      const val = r ? r.value : '';
+      document.getElementById('src71PersonFields').classList.toggle('d-none', val !== 'บุคคลแนะนำ');
+      document.getElementById('src71OnlineFields').classList.toggle('d-none', val !== 'แพลตฟอร์มสื่อออนไลน์');
+      document.getElementById('src71OtherFields').classList.toggle('d-none', val !== 'อื่น ๆ');
+    }
+
+    function onSource72Change() {
+      const r = document.querySelector('input[name="col29"]:checked');
+      const val = r ? r.value : '';
+      document.getElementById('src72PersonFields').classList.toggle('d-none', val !== 'บุคคลแนะนำ');
+      document.getElementById('src72OnlineFields').classList.toggle('d-none', val !== 'แพลตฟอร์มสื่อออนไลน์');
+      document.getElementById('src72OtherFields').classList.toggle('d-none', val !== 'อื่น ๆ');
+    }
+
     function onBangkokStayToggle() {
       const hasStay = document.getElementById('bangkokStayYes').checked;
       const fields  = document.getElementById('bangkokStayFields');
@@ -1515,6 +1844,15 @@
       if (bangkokNo) bangkokNo.checked = true;
       const bangkokFields = document.getElementById('bangkokStayFields');
       if (bangkokFields) bangkokFields.classList.add('d-none');
+      // Reset all conditional panels
+      ['noticeDetailRow','foundLocationDetailRow','carryMethodDetailRow','envelopeDetailFields',
+       'clothingDetailRow','speechDetailRow','visitedRoyalDetailRow','priorComplaintDetailRow',
+       'src71PersonFields','src71OnlineFields','src71OtherFields',
+       'src72PersonFields','src72OnlineFields','src72OtherFields',
+       'palaceVisitFields','docSubmitFields'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('d-none');
+      });
     }
 
     function onIncidentProvinceChange(el) {

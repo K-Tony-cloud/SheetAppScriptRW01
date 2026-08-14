@@ -6,14 +6,24 @@ const ADMIN_PASSWORD_DEFAULT = "123456";   // fallback only; prefer Script Prope
 const SESSION_TTL_SECS       = 3600;       // 1-hour session token
 
 // Phone / ID columns (1-based sheet col index) — force text storage
-const PHONE_COLS_1BASED = [7, 9, 27, 50];
+const PHONE_COLS_1BASED = [7, 9, 27, 50, 107, 109, 111, 117, 132];
 
 const ALLOWED_MIME_TYPES = [
   'image/jpeg','image/jpg','image/png','image/gif',
   'image/webp','image/heic','image/heif','image/bmp'
 ];
-const SECTION_TYPES = ['officer_found','person_portrait','items_evidence'];
-const SECTION_MAX   = { officer_found: 2, person_portrait: 1, items_evidence: 10 };
+const SECTION_TYPES = [
+  'officer_found','person_portrait','items_evidence',
+  'appearance_photo',
+  'source_profile_71','source_post_71','source_other_71',
+  'source_profile_72','source_post_72','source_other_72'
+];
+const SECTION_MAX = {
+  officer_found: 2, person_portrait: 1, items_evidence: 10,
+  appearance_photo: 3,
+  source_profile_71: 1, source_post_71: 3, source_other_71: 3,
+  source_profile_72: 1, source_post_72: 3, source_other_72: 3
+};
 
 // ===== HTTP ENTRY POINTS =====
 
@@ -60,6 +70,10 @@ function doPost(e) {
     else if (action === 'initAddressColumns') {
       if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initAddressColumns();
+    }
+    else if (action === 'initNewFormColumns') {
+      if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = initNewFormColumns();
     }
     else if (action === 'initRecordIdCounter') {
       if (!validateSession(data.token || '')) result = { success: false, message: 'ไม่มีสิทธิ์' };
@@ -263,7 +277,7 @@ function updateData(sheetRowNum, formObject, token) {
   try {
     var sheet      = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
     var existingId = sheet.getRange(sheetRowNum, 1).getValue();
-    var lastCol    = Math.max(93, sheet.getLastColumn());
+    var lastCol    = Math.max(152, sheet.getLastColumn());
     var existingVals = sheet.getRange(sheetRowNum, 1, 1, lastCol).getValues()[0];
     var updatedRow = buildDataRow(existingId, formObject, existingVals);
     sheet.getRange(sheetRowNum, 1, 1, updatedRow.length).setValues([updatedRow]);
@@ -357,7 +371,75 @@ function buildDataRow(recordId, f, existingVals) {
     col('col80', 79),  col('col81', 80),  col('col82', 81),  col('col83', 82),  col('col84', 83),
     // D: สถานที่พักใน กทม
     col('col85', 84),  col('col86', 85),  col('col87', 86),  col('col88', 87),
-    col('col89', 88),  col('col90', 89),  col('col91', 90),  col('col92', 91),  col('col93', 92)
+    col('col89', 88),  col('col90', 89),  col('col91', 90),  col('col92', 91),  col('col93', 92),
+    // Section 2 extension
+    col('col94',  93),  // found_officer_position
+    // Section 3 extension
+    col('col95',  94),  // carry_method_detail
+    col('col96',  95),  // container_width_cm
+    col('col97',  96),  // container_length_cm
+    col('col98',  97),  // container_source
+    col('col99',  98),  // envelope_width_cm
+    col('col100', 99),  // envelope_length_cm
+    col('col101',100),  // envelope_source
+    // Section 4 extension
+    col('col102',101),  // education
+    col('col103',102),  // institution
+    col('col104',103),  // occupation
+    col('col105',104),  // income
+    col('col106',105),  // father_name
+    col('col107',106),  // father_phone
+    col('col108',107),  // mother_name
+    col('col109',108),  // mother_phone
+    col('col110',109),  // guardian_name
+    col('col111',110),  // guardian_phone
+    // Section 5 extension
+    col('col112',111),  // visited_royal_count
+    // Section 6 extension
+    col('col113',112),  // petition_case_type
+    // Section 7.1 — ทราบเรื่องการถวายฎีกาจากที่ใด
+    col('col114',113),  // source71_person_name
+    col('col115',114),  // source71_person_age
+    col('col116',115),  // source71_person_idcard
+    col('col117',116),  // source71_person_phone
+    col('col118',117),  // source71_person_education
+    col('col119',118),  // source71_person_institution
+    col('col120',119),  // source71_person_occupation
+    col('col121',120),  // source71_person_income
+    col('col122',121),  // source71_platform_type
+    col('col123',122),  // source71_platform_url
+    col('col124',123),  // source71_platform_name
+    col('col125',124),  // source71_platform_followers
+    col('col126',125),  // source71_post_url
+    col('col127',126),  // source71_post_date
+    col('col128',127),  // source71_other_detail
+    // Section 7.2 — ทราบจากที่ใดว่าจะมีขบวนเสด็จ
+    col('col129',128),  // source72_person_name
+    col('col130',129),  // source72_person_age
+    col('col131',130),  // source72_person_idcard
+    col('col132',131),  // source72_person_phone
+    col('col133',132),  // source72_person_education
+    col('col134',133),  // source72_person_institution
+    col('col135',134),  // source72_person_occupation
+    col('col136',135),  // source72_person_income
+    col('col137',136),  // source72_platform_type
+    col('col138',137),  // source72_platform_url
+    col('col139',138),  // source72_platform_name
+    col('col140',139),  // source72_platform_followers
+    col('col141',140),  // source72_post_url
+    col('col142',141),  // source72_post_date
+    col('col143',142),  // source72_other_detail
+    // Section 7.4 — เคยมายื่นถวายฎีกาที่พระบรมมหาราชวัง
+    col('col144',143),  // palace_visit_count
+    col('col145',144),  // palace_visit_date1
+    col('col146',145),  // palace_visit_date2
+    col('col147',146),  // palace_visit_date3
+    col('col148',147),  // palace_visit_date4
+    col('col149',148),  // doc_submit_status
+    col('col150',149),  // doc_submit_date
+    col('col151',150),  // doc_submit_detail
+    // Section 7.9
+    col('col152',151)   // after_petition_destination
   ];
 }
 
@@ -656,6 +738,47 @@ function initAddressColumns() {
   sheet.getRange(1, 64, 1, headers.length).setValues([headers]);
   SpreadsheetApp.flush();
   return { success: true, message: 'Added ' + headers.length + ' address column headers (col64–col93)' };
+}
+
+/**
+ * Add col94–col152 headers for Section 2–7 new fields (run once via initNewFormColumns action).
+ */
+function initNewFormColumns() {
+  var sheet   = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var lastCol = sheet.getLastColumn();
+  if (lastCol >= 152) return { success: true, message: 'New form columns already present (lastCol=' + lastCol + ')' };
+  var headers = [
+    // col94-101: Section 2-3 extensions
+    'found_officer_position',
+    'carry_method_detail',
+    'container_width_cm','container_length_cm','container_source',
+    'envelope_width_cm','envelope_length_cm','envelope_source',
+    // col102-111: Section 4 personal + family
+    'education','institution','occupation','income',
+    'father_name','father_phone','mother_name','mother_phone','guardian_name','guardian_phone',
+    // col112: Section 5
+    'visited_royal_count',
+    // col113: Section 6
+    'petition_case_type',
+    // col114-128: Section 7.1
+    'source71_person_name','source71_person_age','source71_person_idcard','source71_person_phone',
+    'source71_person_education','source71_person_institution','source71_person_occupation','source71_person_income',
+    'source71_platform_type','source71_platform_url','source71_platform_name','source71_platform_followers',
+    'source71_post_url','source71_post_date','source71_other_detail',
+    // col129-143: Section 7.2
+    'source72_person_name','source72_person_age','source72_person_idcard','source72_person_phone',
+    'source72_person_education','source72_person_institution','source72_person_occupation','source72_person_income',
+    'source72_platform_type','source72_platform_url','source72_platform_name','source72_platform_followers',
+    'source72_post_url','source72_post_date','source72_other_detail',
+    // col144-152: Section 7.4 + 7.9
+    'palace_visit_count','palace_visit_date1','palace_visit_date2','palace_visit_date3','palace_visit_date4',
+    'doc_submit_status','doc_submit_date','doc_submit_detail',
+    'after_petition_destination'
+  ];
+  var startCol = 94;
+  sheet.getRange(1, startCol, 1, headers.length).setValues([headers]);
+  SpreadsheetApp.flush();
+  return { success: true, message: 'Added ' + headers.length + ' new form column headers (col94–col152)' };
 }
 
 /**
