@@ -529,8 +529,8 @@
                 </select>
               </div>
               <div class="col-md-8 d-none" id="foundLocationDetailRow">
-                <label class="form-label">รายละเอียดสถานที่ตรวจพบ</label>
-                <input type="text" class="form-control" name="col45" placeholder="ระบุรายละเอียด (กรณีอื่น ๆ)">
+                <label class="form-label" id="foundLocationDetailLabel">ระบุรายละเอียด</label>
+                <input type="text" class="form-control" name="col45" id="foundLocationDetailInput" placeholder="ระบุรายละเอียด">
               </div>
               <div class="col-md-3 col-6"><label class="form-label fw-semibold">2.2 วันที่ตรวจพบ</label><input type="date" class="form-control" name="col46"></div>
               <div class="col-md-3 col-6"><label class="form-label">เวลาที่ตรวจพบ</label><input type="time" class="form-control" name="col47"></div>
@@ -679,9 +679,9 @@
                   <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col65"></div>
                   <div class="col-6 col-md-3"><label class="form-label form-label-sm">ซอย</label><input type="text" class="form-control form-control-sm" name="col66"></div>
                   <div class="col-6 col-md-3"><label class="form-label form-label-sm">ถนน</label><input type="text" class="form-control form-control-sm" name="col67"></div>
-                  <div class="col-6 col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><input type="text" class="form-control form-control-sm" name="col68"></div>
-                  <div class="col-6 col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><input type="text" class="form-control form-control-sm" name="col69"></div>
-                  <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label><select class="form-select form-select-sm" name="col70" id="currentAddressProvince"><option value="">-- เลือกจังหวัด --</option></select></div>
+                  <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label><select class="form-select form-select-sm" name="col70" id="currentAddressProvince" onchange="onCurrentProvinceChange(this)"><option value="">-- เลือกจังหวัด --</option></select></div>
+                  <div class="col-6 col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><select class="form-select form-select-sm" name="col69" id="currentAddressDistrict" onchange="onCurrentDistrictChange(this)" disabled><option value="">-- เลือกอำเภอ/เขต --</option></select></div>
+                  <div class="col-6 col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><select class="form-select form-select-sm" name="col68" id="currentAddressSubdistrict" disabled><option value="">-- เลือกตำบล/แขวง --</option></select></div>
                   <div class="col-12"><label class="form-label form-label-sm">สถานีตำรวจที่พื้นที่รับผิดชอบ</label><input type="text" class="form-control form-control-sm" name="col71"></div>
                 </div>
               </div>
@@ -693,9 +693,9 @@
                   <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col73"></div>
                   <div class="col-6 col-md-3"><label class="form-label form-label-sm">ซอย</label><input type="text" class="form-control form-control-sm" name="col74"></div>
                   <div class="col-6 col-md-3"><label class="form-label form-label-sm">ถนน</label><input type="text" class="form-control form-control-sm" name="col75"></div>
-                  <div class="col-6 col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><input type="text" class="form-control form-control-sm" name="col76"></div>
-                  <div class="col-6 col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><input type="text" class="form-control form-control-sm" name="col77"></div>
-                  <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label><select class="form-select form-select-sm" name="col78" id="domicileProvince"><option value="">-- เลือกจังหวัด --</option></select></div>
+                  <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label><select class="form-select form-select-sm" name="col78" id="domicileProvince" onchange="onDomicileProvinceChange(this)"><option value="">-- เลือกจังหวัด --</option></select></div>
+                  <div class="col-6 col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><select class="form-select form-select-sm" name="col77" id="domicileDistrict" onchange="onDomicileDistrictChange(this)" disabled><option value="">-- เลือกอำเภอ/เขต --</option></select></div>
+                  <div class="col-6 col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><select class="form-select form-select-sm" name="col76" id="domicileSubdistrict" disabled><option value="">-- เลือกตำบล/แขวง --</option></select></div>
                   <div class="col-12"><label class="form-label form-label-sm">สถานีตำรวจที่พื้นที่รับผิดชอบ</label><input type="text" class="form-control form-control-sm" name="col79"></div>
                 </div>
               </div>
@@ -846,9 +846,9 @@
                     <div class="col-6 col-md-3"><label class="form-label form-label-sm">หมู่ที่</label><input type="text" class="form-control form-control-sm" name="col87"></div>
                     <div class="col-6 col-md-3"><label class="form-label form-label-sm">ซอย</label><input type="text" class="form-control form-control-sm" name="col88"></div>
                     <div class="col-6 col-md-3"><label class="form-label form-label-sm">ถนน</label><input type="text" class="form-control form-control-sm" name="col89"></div>
-                    <div class="col-6 col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><input type="text" class="form-control form-control-sm" name="col90"></div>
-                    <div class="col-6 col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><input type="text" class="form-control form-control-sm" name="col91"></div>
-                    <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label><select class="form-select form-select-sm" name="col92" id="bangkokStayProvince"><option value="">-- เลือกจังหวัด --</option></select></div>
+                    <div class="col-12 col-md-4"><label class="form-label form-label-sm">จังหวัด</label><select class="form-select form-select-sm" name="col92" id="bangkokStayProvince" onchange="onBangkokProvinceChange(this)"><option value="">-- เลือกจังหวัด --</option></select></div>
+                    <div class="col-6 col-md-4"><label class="form-label form-label-sm">อำเภอ/เขต</label><select class="form-select form-select-sm" name="col91" id="bangkokStayDistrict" onchange="onBangkokDistrictChange(this)" disabled><option value="">-- เลือกอำเภอ/เขต --</option></select></div>
+                    <div class="col-6 col-md-4"><label class="form-label form-label-sm">ตำบล/แขวง</label><select class="form-select form-select-sm" name="col90" id="bangkokStaySubdistrict" disabled><option value="">-- เลือกตำบล/แขวง --</option></select></div>
                     <div class="col-12"><label class="form-label form-label-sm">สถานีตำรวจที่พื้นที่รับผิดชอบ</label><input type="text" class="form-control form-control-sm" name="col93"></div>
                   </div>
                 </div>
@@ -1181,6 +1181,9 @@
     let selectedRows = new Set();
     let activeCompletenessFilter = 'all';
     let activeVisitFilter = 'all';
+    var currentAmphoeMap  = {};
+    var domicileAmphoeMap = {};
+    var bangkokAmphoeMap  = {};
 
     const CLIENT_PERMISSIONS = {
       viewer:      ['view_dashboard', 'view_records'],
@@ -2202,7 +2205,7 @@
       // Trigger all conditional panels
       const colEl = (name) => form.querySelector('[name="' + name + '"]');
       onNoticeStatusChange();
-      onFoundLocationChange(colEl('col44'));
+      onFoundLocationChange(colEl('col44'), true);
       onCarryMethodChange(colEl('col55'));
       onEnvelopeStatusChange(colEl('col57'));
       onClothingChange(colEl('col10'));
@@ -2225,11 +2228,25 @@
         const tpEl = document.getElementById('travelFromProvince');
         if (tpEl) tpEl.value = travelProv;
       }
-      // Re-set bangkok province after panel is visible
+      // Restore current address cascade (col70=province idx69, col69=district idx68, col68=subdistrict idx67)
+      restoreCurrentAddress(
+        (rowData[69] || '').toString().replace(/^'/, ''),
+        (rowData[68] || '').toString().replace(/^'/, ''),
+        (rowData[67] || '').toString().replace(/^'/, '')
+      );
+      // Restore domicile address cascade (col78=province idx77, col77=district idx76, col76=subdistrict idx75)
+      restoreDomicileAddress(
+        (rowData[77] || '').toString().replace(/^'/, ''),
+        (rowData[76] || '').toString().replace(/^'/, ''),
+        (rowData[75] || '').toString().replace(/^'/, '')
+      );
+      // Restore bangkok stay address cascade (col92=province idx91, col91=district idx90, col90=subdistrict idx89)
       if (bangkokStatus === 'มีสถานที่พัก') {
-        const bkProv = (rowData[91] || '').toString().replace(/^'/, '');
-        const bkEl   = document.getElementById('bangkokStayProvince');
-        if (bkEl && bkProv) { populateAddressProvinceDropdown('bangkokStayProvince'); bkEl.value = bkProv; }
+        restoreBangkokStayAddress(
+          (rowData[91] || '').toString().replace(/^'/, ''),
+          (rowData[90] || '').toString().replace(/^'/, ''),
+          (rowData[89] || '').toString().replace(/^'/, '')
+        );
       }
     }
 
@@ -2387,6 +2404,7 @@
     function populateIncidentProvinceDropdown() {
       const el = document.getElementById('incidentProvince');
       if (!el || !provincesData) return;
+      if (el.options.length > 1) return;
       const cur = el.value;
       el.innerHTML = '<option value="">-- เลือกจังหวัด --</option>';
       provincesData.forEach(function(p) {
@@ -2399,6 +2417,7 @@
     function populateAddressProvinceDropdown(elemId) {
       const el = document.getElementById(elemId);
       if (!el || !provincesData) return;
+      if (el.options.length > 1) return;
       const cur = el.value;
       el.innerHTML = '<option value="">-- เลือกจังหวัด --</option>';
       provincesData.forEach(function(p) {
@@ -2415,10 +2434,25 @@
       row.classList.toggle('d-none', val.value !== 'มีหมายเสด็จ');
     }
 
-    function onFoundLocationChange(el) {
+    function onFoundLocationChange(el, isEditRestore) {
       const row = document.getElementById('foundLocationDetailRow');
+      const lbl = document.getElementById('foundLocationDetailLabel');
+      const inp = document.getElementById('foundLocationDetailInput');
       if (!row) return;
-      row.classList.toggle('d-none', !el || el.value !== 'อื่น ๆ');
+      const val = el ? el.value : '';
+      const showDetail = val === 'จุดคัดกรอง' || val === 'อุโมงค์' || val === 'อื่น ๆ';
+      row.classList.toggle('d-none', !showDetail);
+      if (lbl) {
+        if (val === 'จุดคัดกรอง') lbl.textContent = 'ระบุจุดคัดกรอง';
+        else if (val === 'อุโมงค์') lbl.textContent = 'ระบุอุโมงค์';
+        else lbl.textContent = 'ระบุสถานที่';
+      }
+      if (inp) {
+        if (val === 'จุดคัดกรอง') inp.placeholder = 'เช่น ประตูวิเศษไชยศรี, จุดที่ 3...';
+        else if (val === 'อุโมงค์') inp.placeholder = 'เช่น อุโมงค์ฝั่งขวา...';
+        else inp.placeholder = 'ระบุสถานที่';
+        if (val === 'สน.พระราชวัง' && !isEditRestore) inp.value = '';
+      }
     }
 
     function onCarryMethodChange(el) {
@@ -2498,6 +2532,108 @@
       }
     }
 
+    // ==================== ADDRESS CASCADE HELPERS ====================
+    function _cascadeLoadDistricts(provinceName, districtElId, subdistrictElId, amphoeMap) {
+      const dEl = document.getElementById(districtElId);
+      const sEl = document.getElementById(subdistrictElId);
+      if (!dEl || !sEl) return Promise.resolve();
+      dEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
+      sEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
+      dEl.disabled = true; sEl.disabled = true;
+      if (!provinceName) return Promise.resolve();
+      const provinceId = provinceNameToId[provinceName];
+      if (!provinceId) return Promise.resolve();
+      dEl.innerHTML = '<option value="">กำลังโหลด...</option>';
+      return gasGet({ action: 'amphures', provinceId: provinceId })
+        .then(function(data) {
+          Object.keys(amphoeMap).forEach(function(k) { delete amphoeMap[k]; });
+          dEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
+          data.forEach(function(a) {
+            dEl.innerHTML += '<option value="' + a.name + '">' + a.name + '</option>';
+            amphoeMap[a.name] = a.id;
+          });
+          dEl.disabled = false;
+        })
+        .catch(function() {
+          dEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
+        });
+    }
+
+    function _cascadeLoadSubdistricts(districtName, subdistrictElId, amphoeMap) {
+      const sEl = document.getElementById(subdistrictElId);
+      if (!sEl) return;
+      sEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
+      sEl.disabled = true;
+      if (!districtName) return;
+      const amphoeId = amphoeMap[districtName];
+      if (!amphoeId) return;
+      sEl.innerHTML = '<option value="">กำลังโหลด...</option>';
+      gasGet({ action: 'tambons', amphureId: amphoeId })
+        .then(function(data) {
+          sEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
+          data.forEach(function(t) {
+            sEl.innerHTML += '<option value="' + t.name + '">' + t.name + '</option>';
+          });
+          sEl.disabled = false;
+        })
+        .catch(function() {
+          sEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
+        });
+    }
+
+    function _restoreAddrGroup(provinceName, districtName, subdistrictName, provinceElId, districtElId, subdistrictElId, amphoeMap) {
+      const pEl = document.getElementById(provinceElId);
+      if (!pEl) return;
+      if (pEl.options.length <= 1) populateAddressProvinceDropdown(provinceElId);
+      pEl.value = provinceName || '';
+      if (!provinceName) return;
+      _cascadeLoadDistricts(provinceName, districtElId, subdistrictElId, amphoeMap)
+        .then(function() {
+          const dEl = document.getElementById(districtElId);
+          if (dEl) dEl.value = districtName || '';
+          if (districtName) {
+            _cascadeLoadSubdistricts(districtName, subdistrictElId, amphoeMap);
+            setTimeout(function() {
+              const sEl = document.getElementById(subdistrictElId);
+              if (sEl) sEl.value = subdistrictName || '';
+            }, 600);
+          }
+        });
+    }
+
+    // Current address cascade
+    function onCurrentProvinceChange(el) {
+      _cascadeLoadDistricts(el.value, 'currentAddressDistrict', 'currentAddressSubdistrict', currentAmphoeMap);
+    }
+    function onCurrentDistrictChange(el) {
+      _cascadeLoadSubdistricts(el.value, 'currentAddressSubdistrict', currentAmphoeMap);
+    }
+    function restoreCurrentAddress(province, district, subdistrict) {
+      _restoreAddrGroup(province, district, subdistrict, 'currentAddressProvince', 'currentAddressDistrict', 'currentAddressSubdistrict', currentAmphoeMap);
+    }
+
+    // Domicile address cascade
+    function onDomicileProvinceChange(el) {
+      _cascadeLoadDistricts(el.value, 'domicileDistrict', 'domicileSubdistrict', domicileAmphoeMap);
+    }
+    function onDomicileDistrictChange(el) {
+      _cascadeLoadSubdistricts(el.value, 'domicileSubdistrict', domicileAmphoeMap);
+    }
+    function restoreDomicileAddress(province, district, subdistrict) {
+      _restoreAddrGroup(province, district, subdistrict, 'domicileProvince', 'domicileDistrict', 'domicileSubdistrict', domicileAmphoeMap);
+    }
+
+    // Bangkok stay address cascade
+    function onBangkokProvinceChange(el) {
+      _cascadeLoadDistricts(el.value, 'bangkokStayDistrict', 'bangkokStaySubdistrict', bangkokAmphoeMap);
+    }
+    function onBangkokDistrictChange(el) {
+      _cascadeLoadSubdistricts(el.value, 'bangkokStaySubdistrict', bangkokAmphoeMap);
+    }
+    function restoreBangkokStayAddress(province, district, subdistrict) {
+      _restoreAddrGroup(province, district, subdistrict, 'bangkokStayProvince', 'bangkokStayDistrict', 'bangkokStaySubdistrict', bangkokAmphoeMap);
+    }
+
     function resetAddressGroups() {
       const bangkokNo = document.getElementById('bangkokStayNo');
       if (bangkokNo) bangkokNo.checked = true;
@@ -2512,6 +2648,16 @@
         const el = document.getElementById(id);
         if (el) el.classList.add('d-none');
       });
+      // Reset cascade selects for current/domicile/bangkokStay
+      [['currentAddressDistrict','currentAddressSubdistrict'],
+       ['domicileDistrict','domicileSubdistrict'],
+       ['bangkokStayDistrict','bangkokStaySubdistrict']].forEach(function(pair) {
+        var dEl = document.getElementById(pair[0]);
+        var sEl = document.getElementById(pair[1]);
+        if (dEl) { dEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>'; dEl.disabled = true; }
+        if (sEl) { sEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>'; sEl.disabled = true; }
+      });
+      currentAmphoeMap = {}; domicileAmphoeMap = {}; bangkokAmphoeMap = {};
     }
 
     function onIncidentProvinceChange(el) {
