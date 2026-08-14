@@ -120,6 +120,31 @@
     .dash-widget .wg-item.wg-clickable:hover { background: #f0f4ff; }
     .dash-widget .wg-item.wg-clickable.active .wg-text { color: #0d6efd; font-weight: 700; }
     .dash-widget .wg-item.wg-clickable.active .wg-badge { background: #0d6efd; color: #fff; }
+    /* ===== ADVANCED FILTER PANEL ===== */
+    .adv-filter-panel { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 12px; padding: 14px 18px; margin-bottom: 14px; }
+    .adv-filter-panel .filter-group-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #6c757d; margin-bottom: 6px; }
+
+    /* ===== SELECTION BAR ===== */
+    .selection-bar { background: #e7f3ff; border: 1px solid #b8d4f5; border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; display: none; align-items: center; gap: 10px; font-size: 0.88rem; }
+    .selection-bar.show { display: flex; }
+
+    /* ===== TABLE BADGES ===== */
+    .badge-notice { font-size: 0.7rem; padding: 2px 6px; border-radius: 8px; font-weight: 700; white-space: nowrap; }
+    .badge-notice-yes { background: #dc3545; color: #fff; }
+    .badge-notice-no  { background: #e9ecef; color: #6c757d; }
+    .photo-badge { background: #0d6efd; color: #fff; font-size: 0.7rem; padding: 2px 6px; border-radius: 10px; font-weight: 700; }
+    .photo-badge.zero { background: #e9ecef; color: #adb5bd; }
+    .visit-badge { font-size: 0.7rem; padding: 2px 7px; border-radius: 8px; font-weight: 700; white-space: nowrap; }
+    .visit-first  { background: #d1e7dd; color: #0f5132; }
+    .visit-return { background: #fff3cd; color: #664d03; }
+    .comp-badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 8px; font-weight: 700; cursor: default; }
+    .comp-complete   { background: #d1e7dd; color: #0f5132; }
+    .comp-incomplete { background: #fff3cd; color: #664d03; }
+    .col-name-cell { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ===== GALLERY ===== */
+    .gallery-section-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #6c757d; margin: 10px 0 6px; }
+
     /* ===== UPLOAD ZONES ===== */
     .up-zone { border: 2px dashed #ced4da; border-radius: 8px; padding: 12px 14px; background: #f8f9fa; margin-top: 4px; }
     .up-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; min-height: 4px; }
@@ -129,6 +154,7 @@
     .up-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.55); color: #fff; font-size: 9px; text-align: center; border-radius: 0 0 5px 5px; padding: 1px 0; }
     .up-ph { width: 76px; height: 76px; background: #e9ecef; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #adb5bd; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -149,6 +175,20 @@
         <button class="btn btn-outline-warning btn-sm d-none" id="btnUserMgmt" onclick="showUserMgmt()">
           <i class="fas fa-users-cog"></i> จัดการผู้ใช้
         </button>
+        <div class="dropdown d-none" id="exportDropdownWrapper">
+          <button class="btn btn-outline-warning btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="fas fa-download"></i> ส่งออก
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();exportExcel('filtered')"><i class="fas fa-file-excel text-success me-2"></i> Excel (ข้อมูลที่กรอง)</a></li>
+            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();exportExcel('all')"><i class="fas fa-file-excel text-success me-2"></i> Excel (ทั้งหมด)</a></li>
+            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();exportExcel('selected')"><i class="fas fa-file-excel text-success me-2"></i> Excel (ที่เลือก)</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();exportPDFSummary('filtered')"><i class="fas fa-file-pdf text-danger me-2"></i> PDF สรุป (ข้อมูลที่กรอง)</a></li>
+            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();exportPDFSummary('all')"><i class="fas fa-file-pdf text-danger me-2"></i> PDF สรุป (ทั้งหมด)</a></li>
+            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();exportPDFSummary('selected')"><i class="fas fa-file-pdf text-danger me-2"></i> PDF สรุป (ที่เลือก)</a></li>
+          </ul>
+        </div>
         <button class="btn btn-outline-danger btn-sm d-none" id="btnLogout" onclick="logout()">
           <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
         </button>
@@ -335,22 +375,104 @@
                 <option value="all">ทุกปี</option>
               </select>
             </div>
+            <button class="btn btn-outline-secondary btn-sm" onclick="toggleAdvFilterPanel()">
+              <i class="fas fa-filter"></i> ตัวกรองขั้นสูง
+            </button>
           </div>
         </div>
+
+        <!-- Advanced Filter Panel -->
+        <div class="adv-filter-panel d-none" id="advFilterPanel">
+          <div class="row g-3">
+            <div class="col-md-3">
+              <div class="filter-group-label">หมายฯ</div>
+              <select class="form-select form-select-sm" id="advNoticeFilter" onchange="applyFilters()">
+                <option value="all">ทั้งหมด</option>
+                <option value="มีหมายเสด็จ">มีหมายเสด็จ</option>
+                <option value="ไม่มีหมายเสด็จ">ไม่มีหมายเสด็จ</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <div class="filter-group-label">สถานที่พบ</div>
+              <select class="form-select form-select-sm" id="advLocationFilter" onchange="applyFilters()">
+                <option value="all">ทั้งหมด</option>
+                <option value="จุดคัดกรอง">จุดคัดกรอง</option>
+                <option value="อุโมงค์">อุโมงค์</option>
+                <option value="สน.พระราชวัง">สน.พระราชวัง</option>
+                <option value="อื่น ๆ">อื่น ๆ</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <div class="filter-group-label">รูปถ่าย</div>
+              <select class="form-select form-select-sm" id="advPhotoFilter" onchange="applyFilters()">
+                <option value="all">ทั้งหมด</option>
+                <option value="has">มีรูปอย่างน้อย 1 รูป</option>
+                <option value="portrait">มีรูปบุคคล</option>
+                <option value="officer">มีรูปเจ้าหน้าที่</option>
+                <option value="items">มีรูปสิ่งของ</option>
+                <option value="none">ไม่มีรูปเลย</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <div class="filter-group-label">ครั้งที่มา</div>
+              <select class="form-select form-select-sm" id="advVisitFilter" onchange="applyFilters()">
+                <option value="all">ทั้งหมด</option>
+                <option value="first">ครั้งแรก</option>
+                <option value="return">มาซ้ำ</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <div class="filter-group-label">ความครบถ้วน</div>
+              <select class="form-select form-select-sm" id="advCompletenessFilter" onchange="applyFilters()">
+                <option value="all">ทั้งหมด</option>
+                <option value="complete">ข้อมูลครบ</option>
+                <option value="incomplete">ยังไม่ครบ</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <div class="filter-group-label">วันที่พบ (ตั้งแต่)</div>
+              <input type="date" class="form-control form-control-sm" id="advDateFrom" onchange="applyFilters()">
+            </div>
+            <div class="col-md-3">
+              <div class="filter-group-label">วันที่พบ (ถึง)</div>
+              <input type="date" class="form-control form-control-sm" id="advDateTo" onchange="applyFilters()">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearAdvFilters()">
+                <i class="fas fa-times"></i> ล้างตัวกรองขั้นสูง
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Selection Bar -->
+        <div class="selection-bar" id="selectionBar">
+          <span id="selectionCount" class="fw-bold text-primary">0 รายการที่เลือก</span>
+          <button class="btn btn-sm btn-outline-secondary ms-2" onclick="clearSelection()"><i class="fas fa-times"></i> ยกเลิกการเลือก</button>
+          <button class="btn btn-sm btn-success ms-auto" onclick="exportExcel('selected')"><i class="fas fa-file-excel me-1"></i> Export ที่เลือก</button>
+        </div>
+
+        <div id="tableFooter" class="text-muted small mb-2"></div>
 
         <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
           <table class="table table-hover table-bordered mb-0">
             <thead class="sticky-top">
               <tr>
-                <th onclick="sortTable(0, 'num')" class="text-center">ลำดับ <i class="fas fa-sort" id="icon-0"></i></th>
-                <th onclick="sortTable(1, 'str')">วันที่ <i class="fas fa-sort" id="icon-1"></i></th>
-                <th onclick="sortTable(2, 'str')">เวลา <i class="fas fa-sort" id="icon-2"></i></th>
-                <th onclick="sortTable(4, 'str')">ชื่อ-สกุล <i class="fas fa-sort" id="icon-4"></i></th>
-                <th onclick="sortTable(17, 'str')">เรื่องโดยสังเขป <i class="fas fa-sort" id="icon-17"></i></th>
+                <th class="text-center" style="width:36px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="เลือกทั้งหมด"></th>
+                <th onclick="sortTable(0,'num')" class="text-center" style="width:52px"># <i class="fas fa-sort" id="icon-0"></i></th>
+                <th onclick="sortTable(1,'str')" style="width:110px">วันที่/เวลา <i class="fas fa-sort" id="icon-1"></i></th>
+                <th onclick="sortTable(4,'str')" style="max-width:160px">ชื่อ-สกุล <i class="fas fa-sort" id="icon-4"></i></th>
+                <th onclick="sortTable(29,'str')" class="text-center" style="width:80px">ครั้งที่มา <i class="fas fa-sort" id="icon-29"></i></th>
+                <th onclick="sortTable(41,'str')" style="width:85px">หมายฯ <i class="fas fa-sort" id="icon-41"></i></th>
+                <th onclick="sortTable(43,'str')">สถานที่พบ <i class="fas fa-sort" id="icon-43"></i></th>
+                <th onclick="sortTable(48,'str')">เจ้าหน้าที่ <i class="fas fa-sort" id="icon-48"></i></th>
+                <th class="text-center" style="width:90px">ความครบถ้วน</th>
+                <th class="text-center" style="width:42px">รูป</th>
+                <th class="text-center" style="width:58px">ดูข้อมูล</th>
               </tr>
             </thead>
             <tbody id="tableBody">
-              <tr><td colspan="5" class="text-center py-4">กำลังโหลดข้อมูล...</td></tr>
+              <tr><td colspan="11" class="text-center py-4">กำลังโหลดข้อมูล...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1056,6 +1178,9 @@
     let activeReasonFilter = null;
     let activeNoticeFilter = null;
     let activeLocationFilter = null;
+    let selectedRows = new Set();
+    let activeCompletenessFilter = 'all';
+    let activeVisitFilter = 'all';
 
     const CLIENT_PERMISSIONS = {
       viewer:      ['view_dashboard', 'view_records'],
@@ -1185,6 +1310,7 @@
       activeCardFilter = 'all';
       activeProvinceFilter = null; activeTopicFilter = null; activeReasonFilter = null;
       activeNoticeFilter = null; activeLocationFilter = null;
+      selectedRows.clear(); activeCompletenessFilter = 'all'; activeVisitFilter = 'all';
       try {
         sessionStorage.removeItem('rw01_token');
         sessionStorage.removeItem('rw01_user');
@@ -1227,9 +1353,11 @@
       const editBtn = document.getElementById('detailEditBtn');
       const delBtn  = document.getElementById('detailDeleteBtn');
       const pdfBtn  = document.getElementById('detailPdfBtn');
+      const expDdWr = document.getElementById('exportDropdownWrapper');
       if (editBtn) editBtn.classList.toggle('d-none', !hasClientPerm('edit_record'));
       if (delBtn)  delBtn.classList.toggle('d-none', !hasClientPerm('delete_record'));
       if (pdfBtn)  pdfBtn.classList.toggle('d-none', !hasClientPerm('export_records'));
+      if (expDdWr) expDdWr.classList.toggle('d-none', !hasClientPerm('export_records'));
     }
 
     // ==================== TOAST ====================
@@ -1433,6 +1561,66 @@
           const val = (item.data[43] || '').toString().trim();
           if (activeLocationFilter === '__unknown__') return val === '';
           return val === activeLocationFilter;
+        });
+      }
+
+      // Advanced filter panel selects
+      var advNoticeSel = document.getElementById('advNoticeFilter');
+      var advNotice = advNoticeSel ? advNoticeSel.value : 'all';
+      if (advNotice !== 'all') {
+        filteredData = filteredData.filter(function(item) { return (item.data[41] || '').toString().trim() === advNotice; });
+      }
+
+      var advLocSel = document.getElementById('advLocationFilter');
+      var advLoc = advLocSel ? advLocSel.value : 'all';
+      if (advLoc !== 'all') {
+        filteredData = filteredData.filter(function(item) { return (item.data[43] || '').toString().trim() === advLoc; });
+      }
+
+      var advPhotoSel = document.getElementById('advPhotoFilter');
+      var advPhoto = advPhotoSel ? advPhotoSel.value : 'all';
+      if (advPhoto !== 'all') {
+        filteredData = filteredData.filter(function(item) {
+          var ac = globalAttachmentCounts[String(item.data[0])] || {};
+          if (advPhoto === 'has')      return (ac.total || 0) > 0;
+          if (advPhoto === 'none')     return (ac.total || 0) === 0;
+          if (advPhoto === 'portrait') return (ac.person_portrait || 0) > 0;
+          if (advPhoto === 'officer')  return (ac.officer_found || 0) > 0;
+          if (advPhoto === 'items')    return (ac.items_evidence || 0) > 0;
+          return true;
+        });
+      }
+
+      var advVisitSel = document.getElementById('advVisitFilter');
+      var advVisit = advVisitSel ? advVisitSel.value : 'all';
+      if (advVisit !== 'all') {
+        filteredData = filteredData.filter(function(item) {
+          var isReturn = (item.data[29] || '').toString().trim() === 'เคย';
+          return advVisit === 'return' ? isReturn : !isReturn;
+        });
+      }
+
+      var advCompSel = document.getElementById('advCompletenessFilter');
+      var advComp = advCompSel ? advCompSel.value : 'all';
+      if (advComp !== 'all') {
+        filteredData = filteredData.filter(function(item) {
+          var comp = calculateRecordCompleteness(item, globalAttachmentCounts);
+          return advComp === 'complete' ? comp.status === 'complete' : comp.status !== 'complete';
+        });
+      }
+
+      var advFrom = (document.getElementById('advDateFrom') || {}).value || '';
+      var advTo   = (document.getElementById('advDateTo')   || {}).value || '';
+      if (advFrom || advTo) {
+        filteredData = filteredData.filter(function(item) {
+          var d45 = (item.data[45] || '').toString().trim();
+          if (!d45) return true;
+          var parts = d45.split('/');
+          if (parts.length < 3) return true;
+          var iso = parts[2] + '-' + ('0'+parts[1]).slice(-2) + '-' + ('0'+parts[0]).slice(-2);
+          if (advFrom && iso < advFrom) return false;
+          if (advTo   && iso > advTo)   return false;
+          return true;
         });
       }
 
@@ -1761,19 +1949,51 @@
     }
 
     function renderTable(dataArray) {
-      const tbody = document.getElementById('tableBody');
-      let html = '';
-      dataArray.forEach((item, index) => {
-        const d = item.data;
+      var tbody  = document.getElementById('tableBody');
+      var footer = document.getElementById('tableFooter');
+      var html = '';
+      dataArray.forEach(function(item, index) {
+        var d   = item.data;
+        var rid = String(d[0]);
+        var isChecked   = selectedRows.has(rid);
+        var noticeVal   = (d[41] || '').toString().trim();
+        var noticeBadge = noticeVal === 'มีหมายเสด็จ'
+          ? '<span class="badge-notice badge-notice-yes">มีหมายเสด็จ</span>'
+          : (noticeVal ? '<span class="badge-notice badge-notice-no">ไม่มี</span>' : '<span class="badge-notice" style="color:#adb5bd">-</span>');
+        var location  = (d[43] || '').toString().trim() || '-';
+        var officer   = ((d[47] || '') + ' ' + (d[48] || '')).trim() || '-';
+        var ac        = globalAttachmentCounts[rid] || {};
+        var photoCount = ac.total || 0;
+        var photoBadge = '<span class="photo-badge' + (photoCount === 0 ? ' zero' : '') + '">' + photoCount + '</span>';
+        var isReturn   = (d[29] || '').toString().trim() === 'เคย';
+        var visitBadge = isReturn
+          ? '<span class="visit-badge visit-return">มาซ้ำ</span>'
+          : '<span class="visit-badge visit-first">ครั้งแรก</span>';
+        var comp = calculateRecordCompleteness(item, globalAttachmentCounts);
+        var compBadge = comp.status === 'complete'
+          ? '<span class="comp-badge comp-complete">✓ ครบ</span>'
+          : '<span class="comp-badge comp-incomplete" title="ขาด: ' + escHtml(comp.missingFields.join(', ')) + '">' + comp.percent + '% · ขาด ' + comp.missingCount + '</span>';
+        var fullName = escHtml((d[3] || '') + ' ' + (d[4] || '-'));
+        var rawName  = ((d[3] || '') + ' ' + (d[4] || '-')).trim();
         html += '<tr class="clickable-row" onclick="viewDetails(' + index + ')">' +
-                  '<td class="text-center">' + (d[0] || '-') + '</td>' +
-                  '<td>' + (d[1] || '-') + '</td>' +
-                  '<td>' + (d[2] || '-') + '</td>' +
-                  '<td class="fw-bold text-primary">' + (d[3] || '') + ' ' + (d[4] || '-') + '</td>' +
-                  '<td class="text-truncate" style="max-width: 250px;">' + (d[17] || '-') + '</td>' +
-                '</tr>';
+          '<td class="text-center" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb" data-rid="' + escHtml(rid) + '" ' + (isChecked ? 'checked' : '') + ' onchange="toggleRowSelect(\'' + escHtml(rid) + '\',event)"></td>' +
+          '<td class="text-center text-muted small">' + escHtml(d[0] || '-') + '</td>' +
+          '<td class="small">' + escHtml(d[1] || '-') + '<br><span class="text-muted">' + escHtml(d[2] || '') + '</span></td>' +
+          '<td class="col-name-cell fw-bold text-primary" title="' + escHtml(rawName) + '">' + fullName + '</td>' +
+          '<td class="text-center">' + visitBadge + '</td>' +
+          '<td>' + noticeBadge + '</td>' +
+          '<td class="small">' + escHtml(location) + '</td>' +
+          '<td class="small">' + escHtml(officer) + '</td>' +
+          '<td class="text-center">' + compBadge + '</td>' +
+          '<td class="text-center">' + photoBadge + '</td>' +
+          '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" onclick="event.stopPropagation();viewDetails(' + index + ')"><i class="fas fa-eye"></i></button></td>' +
+          '</tr>';
       });
-      tbody.innerHTML = html || '<tr><td colspan="5" class="text-center py-4 text-danger fw-bold"><i class="fas fa-search"></i> ไม่พบข้อมูลที่ตรงกับการค้นหา</td></tr>';
+      tbody.innerHTML = html || '<tr><td colspan="11" class="text-center py-4 text-danger fw-bold"><i class="fas fa-search"></i> ไม่พบข้อมูลที่ตรงกับการค้นหา</td></tr>';
+      if (footer) footer.textContent = 'แสดง ' + dataArray.length + ' รายการ จากทั้งหมด ' + globalData.length + ' รายการ';
+      // sync select-all checkbox
+      var selAll = document.getElementById('selectAll');
+      if (selAll) selAll.checked = dataArray.length > 0 && dataArray.every(function(item) { return selectedRows.has(String(item.data[0])); });
     }
 
     // ==================== DETAIL MODAL ====================
@@ -2609,6 +2829,183 @@
     }
 
     // ==================== UTILITIES ====================
+
+    function escHtml(str) {
+      return (str || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function toggleAdvFilterPanel() {
+      var panel = document.getElementById('advFilterPanel');
+      if (panel) panel.classList.toggle('d-none');
+    }
+
+    function clearAdvFilters() {
+      var ids = ['advNoticeFilter','advLocationFilter','advPhotoFilter','advVisitFilter','advCompletenessFilter'];
+      ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.value = 'all'; });
+      var df = document.getElementById('advDateFrom'); if (df) df.value = '';
+      var dt = document.getElementById('advDateTo');   if (dt) dt.value = '';
+      activeCompletenessFilter = 'all';
+      activeVisitFilter = 'all';
+      applyFilters();
+    }
+
+    function toggleSelectAll(el) {
+      var checked = el.checked;
+      filteredData.forEach(function(item) {
+        var rid = String(item.data[0]);
+        if (checked) selectedRows.add(rid); else selectedRows.delete(rid);
+      });
+      updateSelectionUI();
+      renderTable(filteredData);
+    }
+
+    function toggleRowSelect(rid, evt) {
+      if (evt && evt.stopPropagation) evt.stopPropagation();
+      if (selectedRows.has(rid)) selectedRows.delete(rid); else selectedRows.add(rid);
+      updateSelectionUI();
+      var selAll = document.getElementById('selectAll');
+      if (selAll) selAll.checked = filteredData.length > 0 && filteredData.every(function(item) { return selectedRows.has(String(item.data[0])); });
+    }
+
+    function updateSelectionUI() {
+      var bar   = document.getElementById('selectionBar');
+      var count = document.getElementById('selectionCount');
+      if (!bar) return;
+      var n = selectedRows.size;
+      if (n > 0) { bar.classList.add('show'); if (count) count.textContent = n + ' รายการที่เลือก'; }
+      else bar.classList.remove('show');
+    }
+
+    function clearSelection() {
+      selectedRows.clear();
+      var selAll = document.getElementById('selectAll');
+      if (selAll) selAll.checked = false;
+      updateSelectionUI();
+      renderTable(filteredData);
+    }
+
+    function calculateRecordCompleteness(record, attachmentMeta) {
+      var d = record.data;
+      var recId = String(d[0]);
+      var ac = attachmentMeta[recId] || {};
+      var required = [], missing = [];
+      function check(label, value) {
+        required.push(label);
+        if (!value || value.toString().trim() === '') missing.push(label);
+      }
+      check('วันที่',            d[1]);
+      check('เวลา',              d[2]);
+      check('คำนำหน้า',          d[3]);
+      check('ชื่อ-สกุล',         d[4]);
+      check('เลขบัตร ปชช.',      d[6]);
+      check('เบอร์โทร',          d[8]);
+      check('หมายฯ (สถานะ)',     d[41]);
+      check('สถานที่พบ',         d[43]);
+      check('ชื่อเจ้าหน้าที่พบ', d[48]);
+      required.push('รูปหน้าตรงบุคคล');
+      if ((ac.person_portrait || 0) === 0) missing.push('รูปหน้าตรงบุคคล');
+      var notice = (d[41] || '').toString().trim();
+      if (notice === 'มีหมายเสด็จ') check('รายละเอียดหมายฯ', d[42]);
+      var total = required.length;
+      var percent = total > 0 ? Math.round((total - missing.length) / total * 100) : 100;
+      return { percent: percent, status: missing.length === 0 ? 'complete' : 'incomplete', missingCount: missing.length, missingFields: missing };
+    }
+
+    function getExportData(scope) {
+      if (scope === 'all')      return globalData;
+      if (scope === 'selected') return globalData.filter(function(item) { return selectedRows.has(String(item.data[0])); });
+      return filteredData;
+    }
+
+    function exportExcel(scope) {
+      var data = getExportData(scope);
+      if (!data.length) { showToast('ไม่มีข้อมูลที่จะส่งออก', 'warning'); return; }
+      if (typeof XLSX === 'undefined') { showToast('โหลด SheetJS ไม่สำเร็จ', 'danger'); return; }
+      var headers = [
+        'RecordID','วันที่','เวลา','คำนำหน้า','ชื่อ-สกุล','อายุ','เลขบัตร ปชช','ที่อยู่ปัจจุบัน','เบอร์โทร',
+        'การแต่งกาย','ระบุ(แต่งกาย)','กระเป๋า/อุปกรณ์','ระบุ(กระเป๋า)','พูดคุยรู้เรื่อง','ระบุ(พูดคุย)',
+        'เคยมารับเสด็จ','ระบุ(รับเสด็จ)','เรื่องโดยสังเขป','เคยยื่นร้องเรียน','ระบุ(หน่วย/ผล)',
+        'ทราบจากที่ใด','เดินทางจากจังหวัด','สถานที่พักกทม','ยานพาหนะ','ชื่อผู้ติดต่อ','ความเกี่ยวข้อง',
+        'เบอร์ผู้ติดต่อ','ความตั้งใจวันนี้','ทราบขบวนเสด็จจาก','เคยมายื่นฎีกาที่นี่','ระบุ(เคยมา)',
+        'ยื่นที่อื่นก่อนมาสน.','เคยมายื่นที่อื่น','หลักฐานความคืบหน้า','หมายเหตุ',
+        'ประเภทเรื่อง','สาเหตุเรื่อง','ที่อยู่ภูมิลำเนา','จังหวัดเกิดเหตุ','อำเภอเกิดเหตุ','ตำบลเกิดเหตุ',
+        'หมายฯ','รายละเอียดหมายฯ','สถานที่พบ','รายละเอียดสถานที่','วันที่พบ','เวลาที่พบ',
+        'ยศเจ้าหน้าที่','ชื่อเจ้าหน้าที่','เบอร์เจ้าหน้าที่','วันที่นำส่ง','เวลานำส่ง',
+        'การเก็บสิ่งของ','รายละเอียด(การเก็บ)','ลักษณะการนำพา','ภาชนะ','การใส่ซอง','ขนาดซอง',
+        'ขนาดอื่นๆ','สีซอง','สีอื่นๆ',
+        'ครั้งที่มา','ความครบถ้วน (%)','field ที่ขาด','CreatedAt','UpdatedAt'
+      ];
+      var PHONE_COLS = new Set([6, 8, 26, 49]);
+      var wsData = [headers];
+      data.forEach(function(item) {
+        var row  = item.data;
+        var comp = calculateRecordCompleteness(item, globalAttachmentCounts);
+        var isReturn = (row[29] || '').toString().trim() === 'เคย';
+        var xlRow = row.map(function(cell, i) {
+          var v = (cell === null || cell === undefined) ? '' : cell.toString().replace(/^'/, '');
+          return PHONE_COLS.has(i) ? { v: v, t: 's' } : v;
+        });
+        xlRow.push(isReturn ? 'มาซ้ำ' : 'ครั้งแรก');
+        xlRow.push(comp.percent);
+        xlRow.push(comp.missingCount);
+        xlRow.push((row[61] || '').toString());
+        xlRow.push((row[62] || '').toString());
+        wsData.push(xlRow);
+      });
+      var ws = XLSX.utils.aoa_to_sheet(wsData);
+      var range = XLSX.utils.decode_range(ws['!ref']);
+      for (var r = 1; r <= range.e.r; r++) {
+        PHONE_COLS.forEach(function(ci) {
+          var addr = XLSX.utils.encode_cell({ r: r, c: ci });
+          if (ws[addr]) ws[addr].t = 's';
+        });
+      }
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'ข้อมูล');
+      var now   = new Date();
+      var fname = 'RW01_' + now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2) + '_' + scope + '.xlsx';
+      XLSX.writeFile(wb, fname);
+      showToast('ส่งออก Excel ' + data.length + ' รายการแล้ว', 'success');
+    }
+
+    function exportPDFSummary(scope) {
+      var data = getExportData(scope);
+      if (!data.length) { showToast('ไม่มีข้อมูลที่จะส่งออก', 'warning'); return; }
+      var now   = new Date();
+      var nowStr = now.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+      var scopeLabel = scope === 'all' ? 'ข้อมูลทั้งหมด' : (scope === 'selected' ? 'ข้อมูลที่เลือก' : 'ข้อมูลที่กรอง');
+      var rows = data.map(function(item, idx) {
+        var d = item.data;
+        return '<tr>' +
+          '<td>' + (idx + 1) + '</td>' +
+          '<td>' + escHtml(d[1] || '') + ' ' + escHtml(d[2] || '') + '</td>' +
+          '<td>' + escHtml((d[3] || '') + ' ' + (d[4] || '')) + '</td>' +
+          '<td>' + escHtml(d[17] || '') + '</td>' +
+          '<td>' + escHtml(d[41] || '') + '</td>' +
+          '<td>' + escHtml(d[43] || '') + '</td>' +
+          '<td>' + escHtml((d[47] || '') + ' ' + (d[48] || '')) + '</td>' +
+          '</tr>';
+      }).join('');
+      var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">' +
+        '<title>สรุปข้อมูล สน.พระราชวัง</title>' +
+        '<style>@page{size:A4 landscape;margin:15mm}body{font-family:Sarabun,sans-serif;font-size:10pt;color:#222}' +
+        'h1{font-size:14pt;text-align:center;margin-bottom:4px}p.sub{text-align:center;color:#555;font-size:9pt;margin-bottom:12px}' +
+        'table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:4px 6px;font-size:9pt}' +
+        'th{background:#e9ecef;font-weight:700}tr:nth-child(even){background:#f9f9f9}' +
+        '@media print{button{display:none}}' +
+        '</style></head><body>' +
+        '<h1>ระบบฐานข้อมูลผู้มาติดต่อ สน.พระราชวัง</h1>' +
+        '<p class="sub">สรุปผล: ' + scopeLabel + ' | จำนวน ' + data.length + ' ราย | วันที่พิมพ์: ' + nowStr + '</p>' +
+        '<table><thead><tr><th>#</th><th>วันที่/เวลา</th><th>ชื่อ-สกุล</th><th>เรื่องโดยสังเขป</th><th>หมายฯ</th><th>สถานที่พบ</th><th>เจ้าหน้าที่</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table>' +
+        '<script>window.onload=function(){window.print();}<\/script>' +
+        '</body></html>';
+      var win = window.open('', '_blank');
+      if (!win) { showToast('กรุณาอนุญาต Pop-up ก่อน', 'warning'); return; }
+      win.document.write(html);
+      win.document.close();
+    }
+
     function fixMissingZero(val, type) {
       if (!val) return '-';
       const str = val.toString().replace(/^'/, '').trim();
