@@ -261,7 +261,29 @@
         </div>
       </div>
 
-      <!-- Row 2: 3 info widgets -->
+      <!-- Row 2: Encounter/inspection cards -->
+      <div class="row g-3 mb-3">
+        <div class="col-lg-4 d-flex">
+          <div class="dash-widget w-100">
+            <div class="wg-header"><i class="fas fa-bell text-warning"></i> หมาย (ข้อมูลการพบ)</div>
+            <div id="widgetNotice"><div class="wg-empty"><i class="fas fa-spinner fa-spin"></i></div></div>
+          </div>
+        </div>
+        <div class="col-lg-4 d-flex">
+          <div class="dash-widget w-100">
+            <div class="wg-header"><i class="fas fa-search-location text-danger"></i> สถานที่ที่พบ (5 อันดับสูงสุด)</div>
+            <div id="widgetFoundLocation"><div class="wg-empty"><i class="fas fa-spinner fa-spin"></i></div></div>
+          </div>
+        </div>
+        <div class="col-lg-4 d-flex">
+          <div class="dash-widget w-100">
+            <div class="wg-header"><i class="fas fa-camera text-info"></i> รูปภาพ (ต่อ Record)</div>
+            <div id="widgetPhotos"><div class="wg-empty"><i class="fas fa-spinner fa-spin"></i></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: 3 info widgets -->
       <div class="row g-3 mb-4">
         <div class="col-lg-4 d-flex">
           <div class="dash-widget w-100">
@@ -1019,6 +1041,7 @@
     let currentUser  = null;        // {userId, role, displayName, permissions:[]}
     let globalData   = [];
     let filteredData = [];
+    let globalAttachmentCounts = {};
     let currentViewItem = null;
     let editSheetRow = null;
     let currentEditRecordId = null;
@@ -1028,6 +1051,8 @@
     let activeProvinceFilter = null;
     let activeTopicFilter = null;
     let activeReasonFilter = null;
+    let activeNoticeFilter = null;
+    let activeLocationFilter = null;
 
     const CLIENT_PERMISSIONS = {
       viewer:      ['view_dashboard', 'view_records'],
@@ -1085,10 +1110,11 @@
           gasPost({ action: 'dashboard', token: savedToken })
             .then(function(data) {
               if (data.success && data.allData) {
-                adminSession = savedToken;
-                currentUser  = parsedUser;
+                adminSession           = savedToken;
+                currentUser            = parsedUser;
                 currentUser.permissions = parsedPerms;
-                globalData   = data.allData;
+                globalData             = data.allData;
+                globalAttachmentCounts = data.attachmentCounts || {};
                 filteredData = [...globalData];
                 populateYearDropdown();
                 applyFilters();
@@ -1151,10 +1177,11 @@
     function clearSession() {
       adminSession = null;
       currentUser  = null;
-      globalData = []; filteredData = [];
+      globalData = []; filteredData = []; globalAttachmentCounts = {};
       sortCol = -1; sortAsc = true;
       activeCardFilter = 'all';
       activeProvinceFilter = null; activeTopicFilter = null; activeReasonFilter = null;
+      activeNoticeFilter = null; activeLocationFilter = null;
       try {
         sessionStorage.removeItem('rw01_token');
         sessionStorage.removeItem('rw01_user');
@@ -1251,7 +1278,8 @@
         sessionStorage.setItem('rw01_user',  JSON.stringify(data.user));
         sessionStorage.setItem('rw01_perms', JSON.stringify(data.permissions || []));
       } catch(e) {}
-      globalData   = data.allData || [];
+      globalData             = data.allData || [];
+      globalAttachmentCounts = data.attachmentCounts || {};
       filteredData = [...globalData];
       document.getElementById('loginUsername').value = '';
       document.getElementById('loginPassword').value = '';
@@ -1269,7 +1297,8 @@
             if (data.message && data.message.indexOf('หมดอายุ') !== -1) { logout(); return; }
             showToast('ไม่สามารถโหลดข้อมูลได้: ' + data.message, 'danger'); return;
           }
-          globalData   = data.allData;
+          globalData             = data.allData;
+          globalAttachmentCounts = data.attachmentCounts || {};
           filteredData = [...globalData];
           populateYearDropdown();
           applyFilters();
@@ -1299,8 +1328,10 @@
     function filterByCard(type) {
       activeCardFilter = type;
       activeProvinceFilter = null;
-      activeTopicFilter = null;
-      activeReasonFilter = null;
+      activeTopicFilter    = null;
+      activeReasonFilter   = null;
+      activeNoticeFilter   = null;
+      activeLocationFilter = null;
       document.querySelectorAll('.summary-card').forEach(c => c.classList.remove('active'));
       document.getElementById('card-' + type).classList.add('active');
       applyFilters();
@@ -1318,6 +1349,16 @@
 
     function filterByReason(reason) {
       activeReasonFilter = (activeReasonFilter === reason) ? null : reason;
+      applyFilters();
+    }
+
+    function filterByNotice(val) {
+      activeNoticeFilter = (activeNoticeFilter === val) ? null : val;
+      applyFilters();
+    }
+
+    function filterByLocation(val) {
+      activeLocationFilter = (activeLocationFilter === val) ? null : val;
       applyFilters();
     }
 
@@ -1374,6 +1415,22 @@
         );
       }
 
+      if (activeNoticeFilter !== null) {
+        filteredData = filteredData.filter(item => {
+          const val = (item.data[41] || '').toString().trim();
+          if (activeNoticeFilter === '__unknown__') return val === '';
+          return val === activeNoticeFilter;
+        });
+      }
+
+      if (activeLocationFilter !== null) {
+        filteredData = filteredData.filter(item => {
+          const val = (item.data[43] || '').toString().trim();
+          if (activeLocationFilter === '__unknown__') return val === '';
+          return val === activeLocationFilter;
+        });
+      }
+
       // Re-apply existing sort without toggling direction
       if (sortCol > -1) {
         filteredData.sort((a, b) => {
@@ -1408,9 +1465,91 @@
     }
 
     function updateInfoWidgets(dataArray) {
+      renderNoticeWidget(dataArray);
+      renderFoundLocationWidget(computeTopFoundLocations(dataArray, 5));
+      renderPhotoWidget(dataArray);
       renderProvinceWidget(computeTopProvinces(dataArray, 5));
       renderTopicWidget(computeTopN(dataArray, 35, 5));
       renderReasonWidget(computeTopN(dataArray, 36, 5));
+    }
+
+    // ===== ENCOUNTER WIDGET HELPERS =====
+
+    function computeTopFoundLocations(dataArray, topN) {
+      const freq = {};
+      let unknownCount = 0;
+      dataArray.forEach(item => {
+        const val = (item.data[43] || '').toString().trim();
+        if (val) freq[val] = (freq[val] || 0) + 1;
+        else unknownCount++;
+      });
+      const top = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, topN);
+      if (unknownCount > 0) top.push(['ยังไม่มีข้อมูล', unknownCount, '__unknown__']);
+      return top;
+    }
+
+    function renderNoticeWidget(dataArray) {
+      const el = document.getElementById('widgetNotice');
+      let yes = 0, no = 0, unknown = 0;
+      dataArray.forEach(item => {
+        const val = (item.data[41] || '').toString().trim();
+        if      (val === 'มีหมายเสด็จ')   yes++;
+        else if (val === 'ไม่มีหมายเสด็จ') no++;
+        else                               unknown++;
+      });
+      const rows = [
+        { label: 'มีหมายเสด็จ',    count: yes,     key: 'มีหมายเสด็จ',    icon: 'fa-check-circle text-success' },
+        { label: 'ไม่มีหมายเสด็จ', count: no,      key: 'ไม่มีหมายเสด็จ', icon: 'fa-times-circle text-secondary' },
+        { label: 'ยังไม่มีข้อมูล', count: unknown, key: '__unknown__',     icon: 'fa-question-circle text-muted' }
+      ];
+      el.innerHTML = rows.filter(r => r.count > 0 || r.key !== '__unknown__').map(r => {
+        const isActive = activeNoticeFilter === r.key;
+        return '<div class="wg-item wg-clickable' + (isActive ? ' active' : '') +
+               '" onclick="filterByNotice(\'' + r.key + '\')">' +
+               '<div class="wg-text"><i class="fas ' + r.icon + ' me-1"></i>' + r.label + '</div>' +
+               '<div class="wg-badge">' + r.count + ' ราย</div></div>';
+      }).join('');
+    }
+
+    function renderFoundLocationWidget(entries) {
+      const el = document.getElementById('widgetFoundLocation');
+      if (!entries.length) { el.innerHTML = '<div class="wg-empty">ไม่มีข้อมูล</div>'; return; }
+      el.innerHTML = entries.map(function(e) {
+        const label    = e[0];
+        const count    = e[1];
+        const key      = e[2] || label;
+        const isActive = activeLocationFilter === key;
+        const display  = label.length > 38 ? label.substring(0, 36) + '…' : label;
+        return '<div class="wg-item wg-clickable' + (isActive ? ' active' : '') +
+               '" onclick="filterByLocation(\'' + key.replace(/'/g, "\\'") + '\')">' +
+               '<div class="wg-text" title="' + label + '">' + display + '</div>' +
+               '<div class="wg-badge">' + count + ' ราย</div></div>';
+      }).join('');
+    }
+
+    function renderPhotoWidget(dataArray) {
+      const el = document.getElementById('widgetPhotos');
+      let hasPortrait = 0, hasOfficer = 0, hasItems = 0, noPhoto = 0;
+      dataArray.forEach(item => {
+        const recId  = String(item.data[0]);
+        const counts = globalAttachmentCounts[recId] || {};
+        const total  = counts.total || 0;
+        if (total === 0) { noPhoto++; return; }
+        if ((counts.person_portrait  || 0) > 0) hasPortrait++;
+        if ((counts.officer_found    || 0) > 0) hasOfficer++;
+        if ((counts.items_evidence   || 0) > 0) hasItems++;
+      });
+      const rows = [
+        { label: 'มีรูปบุคคล',                    count: hasPortrait, icon: 'fa-portrait text-primary' },
+        { label: 'มีรูปเจ้าหน้าที่/บุคคลตรวจพบ', count: hasOfficer,  icon: 'fa-user-shield text-warning' },
+        { label: 'มีรูปสิ่งของ/เอกสาร',           count: hasItems,    icon: 'fa-box-open text-info' },
+        { label: 'ไม่มีรูปเลย',                   count: noPhoto,     icon: 'fa-image text-muted' }
+      ];
+      el.innerHTML = rows.map(r =>
+        '<div class="wg-item">' +
+        '<div class="wg-text"><i class="fas ' + r.icon + ' me-1"></i>' + r.label + '</div>' +
+        '<div class="wg-badge">' + r.count + ' ราย</div></div>'
+      ).join('');
     }
 
     function renderProvinceWidget(entries) {
