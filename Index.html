@@ -120,6 +120,14 @@
     .dash-widget .wg-item.wg-clickable:hover { background: #f0f4ff; }
     .dash-widget .wg-item.wg-clickable.active .wg-text { color: #0d6efd; font-weight: 700; }
     .dash-widget .wg-item.wg-clickable.active .wg-badge { background: #0d6efd; color: #fff; }
+    /* ===== UPLOAD ZONES ===== */
+    .up-zone { border: 2px dashed #ced4da; border-radius: 8px; padding: 12px 14px; background: #f8f9fa; margin-top: 4px; }
+    .up-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; min-height: 4px; }
+    .up-thumb { position: relative; width: 76px; height: 76px; flex-shrink: 0; }
+    .up-thumb img { width: 76px; height: 76px; object-fit: cover; border-radius: 6px; border: 1px solid #dee2e6; display: block; }
+    .up-del { position: absolute; top: -6px; right: -6px; background: #dc3545; color: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; z-index: 1; }
+    .up-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.55); color: #fff; font-size: 9px; text-align: center; border-radius: 0 0 5px 5px; padding: 1px 0; }
+    .up-ph { width: 76px; height: 76px; background: #e9ecef; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #adb5bd; }
   </style>
 </head>
 <body>
@@ -351,7 +359,17 @@
               <div class="col-md-4 col-8"><label class="form-label form-label-sm">ชื่อ-นามสกุล</label><input type="text" class="form-control" name="col49"></div>
               <div class="col-md-3 col-6"><label class="form-label form-label-sm">โทรศัพท์</label><input type="text" class="form-control" name="col50"></div>
               <div class="col-md-3 col-6"><label class="form-label form-label-sm">ตำแหน่ง/หน้าที่</label><input type="text" class="form-control" name="col94"></div>
-              <div class="col-12 text-muted small fst-italic"><i class="fas fa-camera me-1"></i> ถ่ายภาพบุคคลตรวจพบ → บันทึกในหมวด "officer_found" หลังบันทึกข้อมูลแล้ว</div>
+              <div class="col-12">
+                <div class="up-zone" id="uz-officer_found">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="fw-semibold small"><i class="fas fa-camera text-primary me-1"></i>ถ่ายภาพบุคคลตรวจพบ</span>
+                    <span class="badge bg-secondary" id="uz-officer_found-cnt">0/2</span>
+                  </div>
+                  <div class="up-thumbs" id="uz-officer_found-thumbs"></div>
+                  <label class="btn btn-sm btn-outline-primary mt-2" for="fi-officer_found" id="uz-officer_found-btn"><i class="fas fa-plus"></i> เพิ่มรูป</label>
+                  <input type="file" id="fi-officer_found" class="d-none" accept="image/*" capture="environment" multiple onchange="upFileSelected('officer_found',this)">
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -412,7 +430,17 @@
                   <div class="col-md-4"><label class="form-label form-label-sm">ที่มาของซองเอกสาร</label><input type="text" class="form-control form-control-sm" name="col101"></div>
                 </div>
               </div>
-              <div class="col-12 text-muted small fst-italic"><i class="fas fa-camera me-1"></i> ถ่ายภาพสิ่งของ/หลักฐาน → บันทึกในหมวด "items_evidence" หลังบันทึกข้อมูลแล้ว</div>
+              <div class="col-12">
+                <div class="up-zone" id="uz-items_evidence">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="fw-semibold small"><i class="fas fa-camera text-warning me-1"></i>ถ่ายภาพสิ่งของ/หลักฐาน</span>
+                    <span class="badge bg-secondary" id="uz-items_evidence-cnt">0/10</span>
+                  </div>
+                  <div class="up-thumbs" id="uz-items_evidence-thumbs"></div>
+                  <label class="btn btn-sm btn-outline-warning mt-2" for="fi-items_evidence" id="uz-items_evidence-btn"><i class="fas fa-plus"></i> เพิ่มรูป</label>
+                  <input type="file" id="fi-items_evidence" class="d-none" accept="image/*" capture="environment" multiple onchange="upFileSelected('items_evidence',this)">
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -441,7 +469,17 @@
               <div class="col-md-3"><label class="form-label">สถานศึกษา</label><input type="text" class="form-control" name="col103"></div>
               <div class="col-md-3"><label class="form-label">อาชีพ</label><input type="text" class="form-control" name="col104"></div>
               <div class="col-md-3"><label class="form-label">รายได้ประมาณ</label><input type="text" class="form-control" name="col105" placeholder="บาท/เดือน"></div>
-              <div class="col-12 text-muted small fst-italic"><i class="fas fa-camera me-1"></i> ถ่ายภาพผู้ยื่นถวายฎีกา → บันทึกในหมวด "person_portrait" หลังบันทึกข้อมูลแล้ว</div>
+              <div class="col-12">
+                <div class="up-zone" id="uz-person_portrait">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="fw-semibold small"><i class="fas fa-camera text-danger me-1"></i>ถ่ายภาพผู้ยื่นถวายฎีกา</span>
+                    <span class="badge bg-secondary" id="uz-person_portrait-cnt">0/1</span>
+                  </div>
+                  <div class="up-thumbs" id="uz-person_portrait-thumbs"></div>
+                  <label class="btn btn-sm btn-outline-danger mt-2" for="fi-person_portrait" id="uz-person_portrait-btn"><i class="fas fa-plus"></i> เพิ่มรูป</label>
+                  <input type="file" id="fi-person_portrait" class="d-none" accept="image/*" capture="environment" onchange="upFileSelected('person_portrait',this)">
+                </div>
+              </div>
               <div class="col-12"><hr class="my-1"><small class="text-muted fw-bold">ข้อมูลครอบครัว</small></div>
               <div class="col-md-5 col-8"><label class="form-label form-label-sm">ชื่อบิดา</label><input type="text" class="form-control" name="col106"></div>
               <div class="col-md-3 col-4"><label class="form-label form-label-sm">โทรศัพท์บิดา</label><input type="text" class="form-control" name="col107"></div>
@@ -501,7 +539,17 @@
                 <label class="form-label">อย่างไร</label>
                 <input type="text" class="form-control" name="col11" placeholder="ระบุรายละเอียดการแต่งกาย">
               </div>
-              <div class="col-12 text-muted small fst-italic"><i class="fas fa-camera me-1"></i> ถ่ายภาพการแต่งกาย → บันทึกในหมวด "appearance_photo" หลังบันทึกข้อมูลแล้ว</div>
+              <div class="col-12">
+                <div class="up-zone" id="uz-appearance_photo">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="fw-semibold small"><i class="fas fa-camera text-success me-1"></i>ถ่ายภาพการแต่งกาย</span>
+                    <span class="badge bg-secondary" id="uz-appearance_photo-cnt">0/3</span>
+                  </div>
+                  <div class="up-thumbs" id="uz-appearance_photo-thumbs"></div>
+                  <label class="btn btn-sm btn-outline-success mt-2" for="fi-appearance_photo" id="uz-appearance_photo-btn"><i class="fas fa-plus"></i> เพิ่มรูป</label>
+                  <input type="file" id="fi-appearance_photo" class="d-none" accept="image/*" capture="environment" multiple onchange="upFileSelected('appearance_photo',this)">
+                </div>
+              </div>
               <div class="col-md-4">
                 <label class="form-label fw-semibold">5.2 การสนทนาพูดคุย</label>
                 <select class="form-select" name="col14" onchange="onSpeechChange(this)">
@@ -665,7 +713,28 @@
                     <div class="col-md-3"><label class="form-label form-label-sm">จำนวนผู้ติดตาม</label><input type="text" class="form-control form-control-sm" name="col125"></div>
                     <div class="col-md-5"><label class="form-label form-label-sm">URL ที่โพสต์</label><input type="text" class="form-control form-control-sm" name="col126"></div>
                     <div class="col-md-4"><label class="form-label form-label-sm">วันที่โพสต์</label><input type="date" class="form-control form-control-sm" name="col127"></div>
-                    <div class="col-12 text-muted small fst-italic"><i class="fas fa-camera me-1"></i> รูปโพสต์/โปรไฟล์ → บันทึกในหมวด source_profile_71 / source_post_71</div>
+                    <div class="col-md-6 col-12">
+                      <div class="up-zone" id="uz-source_profile_71">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                          <span class="fw-semibold small"><i class="fas fa-user-circle text-info me-1"></i>รูปผู้ใช้/เพจ</span>
+                          <span class="badge bg-secondary" id="uz-source_profile_71-cnt">0/1</span>
+                        </div>
+                        <div class="up-thumbs" id="uz-source_profile_71-thumbs"></div>
+                        <label class="btn btn-sm btn-outline-info mt-2" for="fi-source_profile_71" id="uz-source_profile_71-btn"><i class="fas fa-plus"></i> เพิ่มรูป</label>
+                        <input type="file" id="fi-source_profile_71" class="d-none" accept="image/*" onchange="upFileSelected('source_profile_71',this)">
+                      </div>
+                    </div>
+                    <div class="col-md-6 col-12">
+                      <div class="up-zone" id="uz-source_post_71">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                          <span class="fw-semibold small"><i class="fas fa-images text-info me-1"></i>รูปโพสต์</span>
+                          <span class="badge bg-secondary" id="uz-source_post_71-cnt">0/3</span>
+                        </div>
+                        <div class="up-thumbs" id="uz-source_post_71-thumbs"></div>
+                        <label class="btn btn-sm btn-outline-info mt-2" for="fi-source_post_71" id="uz-source_post_71-btn"><i class="fas fa-plus"></i> เพิ่มรูป</label>
+                        <input type="file" id="fi-source_post_71" class="d-none" accept="image/*" multiple onchange="upFileSelected('source_post_71',this)">
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div id="src71OtherFields" class="d-none border rounded p-3 bg-light mb-2">
@@ -703,12 +772,42 @@
                     <div class="col-md-3"><label class="form-label form-label-sm">จำนวนผู้ติดตาม</label><input type="text" class="form-control form-control-sm" name="col140"></div>
                     <div class="col-md-5"><label class="form-label form-label-sm">URL ที่โพสต์</label><input type="text" class="form-control form-control-sm" name="col141"></div>
                     <div class="col-md-4"><label class="form-label form-label-sm">วันที่โพสต์</label><input type="date" class="form-control form-control-sm" name="col142"></div>
-                    <div class="col-12 text-muted small fst-italic"><i class="fas fa-camera me-1"></i> รูปโพสต์/โปรไฟล์ → บันทึกในหมวด source_profile_72 / source_post_72</div>
+                    <div class="col-md-6 col-12">
+                      <div class="up-zone" id="uz-source_profile_72">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                          <span class="fw-semibold small"><i class="fas fa-user-circle text-success me-1"></i>รูปผู้ใช้/เพจ</span>
+                          <span class="badge bg-secondary" id="uz-source_profile_72-cnt">0/1</span>
+                        </div>
+                        <div class="up-thumbs" id="uz-source_profile_72-thumbs"></div>
+                        <label class="btn btn-sm btn-outline-success mt-2" for="fi-source_profile_72" id="uz-source_profile_72-btn"><i class="fas fa-plus"></i> เพิ่มรูป</label>
+                        <input type="file" id="fi-source_profile_72" class="d-none" accept="image/*" onchange="upFileSelected('source_profile_72',this)">
+                      </div>
+                    </div>
+                    <div class="col-md-6 col-12">
+                      <div class="up-zone" id="uz-source_post_72">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                          <span class="fw-semibold small"><i class="fas fa-images text-success me-1"></i>รูปโพสต์</span>
+                          <span class="badge bg-secondary" id="uz-source_post_72-cnt">0/3</span>
+                        </div>
+                        <div class="up-thumbs" id="uz-source_post_72-thumbs"></div>
+                        <label class="btn btn-sm btn-outline-success mt-2" for="fi-source_post_72" id="uz-source_post_72-btn"><i class="fas fa-plus"></i> เพิ่มรูป</label>
+                        <input type="file" id="fi-source_post_72" class="d-none" accept="image/*" multiple onchange="upFileSelected('source_post_72',this)">
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div id="src72OtherFields" class="d-none border rounded p-3 bg-light mb-2">
                   <label class="form-label form-label-sm">รายละเอียด</label>
                   <textarea class="form-control form-control-sm" name="col143" rows="2"></textarea>
+                  <div class="up-zone mt-2" id="uz-source_other_72">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                      <span class="fw-semibold small"><i class="fas fa-camera text-secondary me-1"></i>รูปอื่น ๆ</span>
+                      <span class="badge bg-secondary" id="uz-source_other_72-cnt">0/3</span>
+                    </div>
+                    <div class="up-thumbs" id="uz-source_other_72-thumbs"></div>
+                    <label class="btn btn-sm btn-outline-secondary mt-2" for="fi-source_other_72" id="uz-source_other_72-btn"><i class="fas fa-plus"></i> เพิ่มรูป</label>
+                    <input type="file" id="fi-source_other_72" class="d-none" accept="image/*" multiple onchange="upFileSelected('source_other_72',this)">
+                  </div>
                 </div>
               </div>
               <!-- 7.3 -->
@@ -865,6 +964,7 @@
     let filteredData = [];
     let currentViewItem = null;     // currently open detail record
     let editSheetRow = null;        // null = create mode, number = edit mode
+    let currentEditRecordId = null; // RecordID string for current edit session
     let sortCol = -1;
     let sortAsc = true;
     let activeCardFilter = 'all';
@@ -1499,6 +1599,7 @@
 
     function editRecord(sheetRow, rowData) {
       editSheetRow = sheetRow;
+      currentEditRecordId = (rowData[0] || '').toString().trim();
       const fullName = ((rowData[3] || '') + ' ' + (rowData[4] || '')).trim();
 
       // Update form UI for edit mode
@@ -1510,7 +1611,9 @@
         '<i class="fas fa-save"></i> บันทึกการแก้ไข';
       document.getElementById('cancelEditBtn').classList.remove('d-none');
 
+      initUploadState();
       populateFormForEdit(rowData);
+      upLoadExisting(currentEditRecordId);
       showView('formView');
     }
 
@@ -1604,11 +1707,13 @@
       document.getElementById('dataForm').reset();
       resetIncidentLocation();
       resetAddressGroups();
+      initUploadState();
       showView('dashboardView');
     }
 
     function resetFormMode() {
       editSheetRow = null;
+      currentEditRecordId = null;
       document.getElementById('formTitle').innerHTML =
         '<i class="fas fa-file-signature text-primary"></i> แบบฟอร์มลงข้อมูลใหม่';
       document.getElementById('editModeBanner').classList.add('d-none');
@@ -1678,13 +1783,24 @@
           : '<i class="fas fa-save"></i> บันทึกข้อมูลเข้าฐานข้อมูล';
       };
 
-      const onSuccess = function(response) {
+      const onSuccess = async function(response) {
         resetBtn();
         if (response.success) {
-          showToast(response.message, 'success');
+          const rid = response.recordId || currentEditRecordId;
+          let upErrs = [];
+          if (rid) {
+            showToast('กำลังอัปโหลดรูปภาพ...', 'info');
+            upErrs = await upFlushPending(rid);
+          }
+          if (upErrs.length > 0) {
+            showToast('บันทึกสำเร็จ แต่รูปบางรูปล้มเหลว: ' + upErrs.slice(0, 2).join('; '), 'warning');
+          } else {
+            showToast(response.message, 'success');
+          }
           form.reset();
           resetIncidentLocation();
           resetAddressGroups();
+          initUploadState();
           if (isEdit) {
             resetFormMode();
             refreshDashboard();
@@ -1959,6 +2075,128 @@
       if (provEl) { provEl.value = ''; }
       if (amphEl) { amphEl.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>'; amphEl.disabled = true; }
       if (tambEl) { tambEl.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>'; tambEl.disabled = true; }
+    }
+
+    // ==================== UPLOAD ZONES ====================
+    const UPLOAD_LIMITS = {
+      officer_found: 2, person_portrait: 1, items_evidence: 10, appearance_photo: 3,
+      source_profile_71: 1, source_post_71: 3, source_other_71: 3,
+      source_profile_72: 1, source_post_72: 3, source_other_72: 3
+    };
+    let pendingFiles = {};
+    let existingAtts = {};
+
+    function initUploadState() {
+      Object.keys(UPLOAD_LIMITS).forEach(s => { pendingFiles[s] = []; existingAtts[s] = []; });
+      renderAllUploadZones();
+    }
+
+    function upFileSelected(section, input) {
+      const files = Array.from(input.files);
+      input.value = '';
+      const limit = UPLOAD_LIMITS[section] || 5;
+      const used  = (existingAtts[section]||[]).length + (pendingFiles[section]||[]).length;
+      const room  = limit - used;
+      if (room <= 0) { showToast('ครบจำนวนสูงสุด ' + limit + ' รูปแล้ว', 'warning'); return; }
+      const take = files.slice(0, room);
+      if (take.length < files.length) showToast('รับได้อีก ' + room + ' รูปเท่านั้น', 'warning');
+      take.forEach(function(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          pendingFiles[section].push({ file: file, previewUrl: e.target.result });
+          renderUploadZone(section);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function upRemovePending(section, idx) {
+      if (pendingFiles[section]) { pendingFiles[section].splice(idx, 1); renderUploadZone(section); }
+    }
+
+    function upRemoveExisting(section, idx) {
+      const att = (existingAtts[section]||[])[idx];
+      if (!att) return;
+      gasPost({ action: 'deleteAttachment', attachmentId: att.attachmentId, token: adminSession })
+        .then(function(r) {
+          if (r.success) { existingAtts[section].splice(idx, 1); renderUploadZone(section); }
+          else showToast('ลบรูปไม่สำเร็จ: ' + r.message, 'danger');
+        })
+        .catch(function() { showToast('ลบรูปไม่สำเร็จ (เชื่อมต่อไม่ได้)', 'danger'); });
+    }
+
+    function renderUploadZone(section) {
+      const thumbsEl = document.getElementById('uz-' + section + '-thumbs');
+      const cntEl    = document.getElementById('uz-' + section + '-cnt');
+      const btnEl    = document.getElementById('uz-' + section + '-btn');
+      if (!thumbsEl) return;
+      const limit    = UPLOAD_LIMITS[section] || 5;
+      const existing = existingAtts[section] || [];
+      const pending  = pendingFiles[section] || [];
+      const total    = existing.length + pending.length;
+      if (cntEl) cntEl.textContent = total + '/' + limit;
+      if (btnEl) btnEl.classList.toggle('d-none', total >= limit);
+      let html = '';
+      existing.forEach(function(att, i) {
+        html += '<div class="up-thumb">' +
+          (att.previewUrl ? '<img src="' + att.previewUrl + '" alt="">' :
+            '<div class="up-ph"><i class="fas fa-image"></i></div>') +
+          '<button type="button" class="up-del" onclick="upRemoveExisting(\'' + section + '\',' + i + ')">×</button>' +
+          '<span class="up-tag">เดิม</span></div>';
+      });
+      pending.forEach(function(item, i) {
+        html += '<div class="up-thumb">' +
+          '<img src="' + item.previewUrl + '" alt="">' +
+          '<button type="button" class="up-del" onclick="upRemovePending(\'' + section + '\',' + i + ')">×</button>' +
+          '<span class="up-tag">ใหม่</span></div>';
+      });
+      thumbsEl.innerHTML = html;
+    }
+
+    function renderAllUploadZones() {
+      Object.keys(UPLOAD_LIMITS).forEach(renderUploadZone);
+    }
+
+    async function upFlushPending(recordId) {
+      const errors = [];
+      for (const section of Object.keys(UPLOAD_LIMITS)) {
+        const items = (pendingFiles[section] || []).slice();
+        for (const item of items) {
+          try {
+            const base64 = item.previewUrl.split(',')[1];
+            const res = await gasPost({
+              action: 'uploadAttachment',
+              recordId: recordId,
+              section: section,
+              fileData: base64,
+              fileName: item.file.name,
+              mimeType: item.file.type || 'image/jpeg',
+              sizeBytes: item.file.size
+            });
+            if (!res.success) errors.push(section + '/' + item.file.name + ': ' + res.message);
+          } catch(e) {
+            errors.push(section + '/' + item.file.name + ': เชื่อมต่อไม่ได้');
+          }
+        }
+        pendingFiles[section] = [];
+      }
+      renderAllUploadZones();
+      return errors;
+    }
+
+    async function upLoadExisting(recordId) {
+      if (!adminSession || !recordId) return;
+      try {
+        const res = await gasPost({ action: 'listAttachments', recordId: recordId, token: adminSession });
+        if (!res.success) return;
+        Object.keys(UPLOAD_LIMITS).forEach(function(k) { existingAtts[k] = []; });
+        (res.attachments || []).forEach(function(att) {
+          if (existingAtts[att.section] !== undefined) {
+            existingAtts[att.section].push({ attachmentId: att.attachmentId, fileName: att.fileName, previewUrl: null });
+          }
+        });
+        renderAllUploadZones();
+      } catch(e) { console.error('upLoadExisting failed:', e); }
     }
 
     // ==================== UTILITIES ====================
