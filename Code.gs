@@ -26,15 +26,17 @@ const SECTION_MAX = {
 };
 
 const USERS_SHEET_NAME = 'Users';
+const AUDIT_SHEET_NAME = 'AuditLog';
 const PERMISSIONS = {
   viewer:      ['view_dashboard', 'view_records'],
   report:      ['view_dashboard', 'view_records', 'export_records'],
   operator:    ['view_dashboard', 'view_records', 'create_record', 'upload_attachment'],
   admin:       ['view_dashboard', 'view_records', 'create_record', 'upload_attachment',
-                'edit_record', 'delete_record', 'export_records', 'manage_attachments'],
+                'edit_record', 'delete_record', 'export_records', 'manage_attachments',
+                'view_audit'],
   super_admin: ['view_dashboard', 'view_records', 'create_record', 'upload_attachment',
                 'edit_record', 'delete_record', 'export_records', 'manage_attachments',
-                'manage_users', 'manage_system']
+                'manage_users', 'manage_system', 'view_audit']
 };
 
 // ===== HTTP ENTRY POINTS =====
@@ -126,6 +128,18 @@ function doPost(e) {
       if (!validateSession(token)) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = exportRevisionRows(data.revisionId || '', parseInt(data.minRecordId || '420'));
     }
+    else if (action === 'listAuditLogs') {
+      if (!hasPermission(token, 'view_audit')) result = { success: false, message: 'ไม่มีสิทธิ์ดูประวัติการใช้งาน' };
+      else result = listAuditLogs(data, token);
+    }
+    else if (action === 'auditExport') {
+      if (!validateSession(token)) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = auditExport(data, token);
+    }
+    else if (action === 'initAuditLog') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = initAuditLog();
+    }
     else result = { success: false, message: 'Unknown action: ' + action };
   } catch(err) {
     result = { success: false, message: err.toString() };
@@ -190,14 +204,24 @@ function loginUser(username, password) {
       userRow = vals[i]; rowIdx = i + 2; break;
     }
   }
-  if (!userRow) return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
-  if (!userRow[6]) return { success: false, message: 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ' };
+  if (!userRow) {
+    writeAuditLog({ action: 'LOGIN_FAILED', username: username, status: 'FAILED', metadata: { reason: 'user_not_found' } });
+    return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
+  }
+  if (!userRow[6]) {
+    writeAuditLog({ action: 'LOGIN_FAILED', username: username, userId: String(userRow[0]), displayName: String(userRow[4]), role: String(userRow[5]), status: 'FAILED', metadata: { reason: 'account_disabled' } });
+    return { success: false, message: 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ' };
+  }
   var expectedHash = hashPassword(password, String(userRow[3]));
-  if (expectedHash !== String(userRow[2])) return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
+  if (expectedHash !== String(userRow[2])) {
+    writeAuditLog({ action: 'LOGIN_FAILED', username: username, userId: String(userRow[0]), displayName: String(userRow[4]), role: String(userRow[5]), status: 'FAILED', metadata: { reason: 'wrong_password' } });
+    return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
+  }
 
   var token   = Utilities.getUuid();
-  var session = { userId: String(userRow[0]), role: String(userRow[5]), displayName: String(userRow[4]) };
+  var session = { userId: String(userRow[0]), role: String(userRow[5]), displayName: String(userRow[4]), username: String(userRow[1]) };
   CacheService.getScriptCache().put('sess_' + token, JSON.stringify(session), SESSION_TTL_SECS);
+  writeAuditLog({ action: 'LOGIN_SUCCESS', token: token, userId: String(userRow[0]), username: String(userRow[1]), displayName: String(userRow[4]), role: String(userRow[5]), status: 'SUCCESS' });
 
   var now = new Date().toISOString();
   sheet.getRange(rowIdx, 8).setValue(now);
@@ -295,6 +319,7 @@ function createUser(data, token) {
   var now         = new Date().toISOString();
   var displayName = data.displayName || data.username;
   sheet.appendRow([userId, data.username, hash, salt, displayName, data.role, true, '', now, now]);
+  writeAuditLog({ action: 'USER_CREATE', token: token, target: userId, metadata: { username: data.username, role: data.role, displayName: displayName }, status: 'SUCCESS' });
   return { success: true, userId: userId, message: 'สร้างบัญชีผู้ใช้ "' + data.username + '" สำเร็จ' };
 }
 
@@ -313,6 +338,10 @@ function updateUser(data, token) {
       if (data.role !== undefined && PERMISSIONS[data.role]) sheet.getRange(rowNum, 6).setValue(data.role);
       if (data.active !== undefined) sheet.getRange(rowNum, 7).setValue(!!data.active);
       sheet.getRange(rowNum, 10).setValue(now);
+      var uAction = data.role !== undefined ? 'USER_ROLE_CHANGE'
+                  : (data.active !== undefined ? (data.active ? 'USER_ACTIVATE' : 'USER_DEACTIVATE')
+                  : 'USER_UPDATE');
+      writeAuditLog({ action: uAction, token: token, target: data.userId, metadata: { displayName: data.displayName, role: data.role, active: data.active }, status: 'SUCCESS' });
       return { success: true, message: 'อัปเดตผู้ใช้สำเร็จ' };
     }
   }
@@ -335,6 +364,7 @@ function resetUserPassword(data, token) {
       sheet.getRange(rowNum, 3).setValue(hash);
       sheet.getRange(rowNum, 4).setValue(salt);
       sheet.getRange(rowNum, 10).setValue(now);
+      writeAuditLog({ action: 'USER_PASSWORD_RESET', token: token, target: data.userId, status: 'SUCCESS' });
       return { success: true, message: 'รีเซ็ตรหัสผ่านสำเร็จ' };
     }
   }
@@ -499,6 +529,7 @@ function submitData(formObject) {
     sheet.appendRow(newRow);
     var newRowNum = sheet.getLastRow();
     rewritePhoneCells(sheet, newRowNum, newRow);
+    writeAuditLog({ action: 'CREATE_RECORD', token: formObject.token || '', recordId: String(recordId), status: 'SUCCESS' });
     return { success: true, recordId: recordId, message: 'บันทึกข้อมูลสำเร็จ!' };
   } catch(e) {
     return { success: false, message: 'เกิดข้อผิดพลาด: ' + e.toString() };
@@ -508,13 +539,34 @@ function submitData(formObject) {
 function updateData(sheetRowNum, formObject, token) {
   if (!hasPermission(token, 'edit_record')) return { success: false, message: 'ไม่มีสิทธิ์แก้ไขข้อมูล!' };
   try {
-    var sheet      = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-    var existingId = sheet.getRange(sheetRowNum, 1).getValue();
-    var lastCol    = Math.max(152, sheet.getLastColumn());
+    var sheet        = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    var existingId   = sheet.getRange(sheetRowNum, 1).getValue();
+    var lastCol      = Math.max(152, sheet.getLastColumn());
     var existingVals = sheet.getRange(sheetRowNum, 1, 1, lastCol).getValues()[0];
-    var updatedRow = buildDataRow(existingId, formObject, existingVals);
+    var updatedRow   = buildDataRow(existingId, formObject, existingVals);
+
+    // Collect field-level diff before overwrite
+    var auditEntries = [{ action: 'UPDATE_RECORD', token: token, recordId: String(existingId), status: 'SUCCESS' }];
+    var skipIdx      = { 0: true, 61: true, 62: true }; // RecordID, CreatedAt, UpdatedAt
+    for (var fi = 0; fi < updatedRow.length; fi++) {
+      if (skipIdx[fi]) continue;
+      var fl = FIELD_LABEL_MAP[fi];
+      if (!fl) continue;
+      var ov = String(existingVals[fi] !== null && existingVals[fi] !== undefined ? existingVals[fi] : '').replace(/^'/, '');
+      var nv = String(updatedRow[fi] !== null && updatedRow[fi] !== undefined ? updatedRow[fi] : '');
+      if (ov === nv) continue;
+      auditEntries.push({
+        action: 'UPDATE_FIELD', token: token, recordId: String(existingId),
+        target: fl,
+        oldVal: fi === 6 ? '[SENSITIVE]' : ov,
+        newVal: fi === 6 ? '[SENSITIVE]' : nv,
+        status: 'SUCCESS'
+      });
+    }
+
     sheet.getRange(sheetRowNum, 1, 1, updatedRow.length).setValues([updatedRow]);
     rewritePhoneCells(sheet, sheetRowNum, updatedRow);
+    batchWriteAuditLogs(auditEntries);
     return { success: true, message: 'แก้ไขข้อมูลสำเร็จ!' };
   } catch(e) {
     return { success: false, message: 'เกิดข้อผิดพลาด: ' + e.toString() };
@@ -529,6 +581,7 @@ function deleteData(sheetRowNum, token) {
     // Cascade soft-delete attachments
     cascadeDeleteAttachments(recId);
     sheet.deleteRow(sheetRowNum);
+    writeAuditLog({ action: 'DELETE_RECORD', token: token, recordId: recId, status: 'SUCCESS' });
     return { success: true, message: 'ลบข้อมูลสำเร็จ!' };
   } catch(e) {
     return { success: false, message: 'เกิดข้อผิดพลาด: ' + e.toString() };
@@ -742,6 +795,7 @@ function uploadAttachment(data) {
       mime, data.sizeBytes || 0, sortOrder, 'active', now, now, ''
     ]);
     touchRecordUpdatedAt(data.recordId);
+    writeAuditLog({ action: 'UPLOAD_ATTACHMENT', token: data.token || '', recordId: String(data.recordId), target: data.section, metadata: { fileName: safeName, attachmentId: attachmentId }, status: 'SUCCESS' });
     return { success: true, attachmentId: attachmentId, driveFileId: fileId, message: 'อัปโหลดสำเร็จ' };
   } catch(e) {
     return { success: false, message: 'อัปโหลดล้มเหลว: ' + e.toString() };
@@ -805,6 +859,7 @@ function deleteAttachmentRecord(attachmentId, token) {
       attSheet.getRange(rowNum, 12).setValue(now);
       try { DriveApp.getFileById(fileId).setTrashed(true); } catch(e) {}
       touchRecordUpdatedAt(vals[i][1]); // vals[i][1] = RecordID
+      writeAuditLog({ action: 'DELETE_ATTACHMENT', token: token, recordId: String(vals[i][1]), target: attachmentId, metadata: { fileName: String(vals[i][4]) }, status: 'SUCCESS' });
       return { success: true, message: 'ลบไฟล์สำเร็จ (soft delete)' };
     }
   }
@@ -1339,6 +1394,172 @@ function authorizeDriveScope() {
   var msg  = 'Drive authorized ✅ Root: ' + root.getName() + ' (' + root.getId() + ')';
   Logger.log(msg);
   return msg;
+}
+
+// ===== AUDIT LOG =====
+
+var FIELD_LABEL_MAP = {
+  1: 'วันที่บันทึก',     2: 'เวลาบันทึก',       3: 'ชื่อ',           4: 'นามสกุล',
+  5: 'ชื่อเล่น',         6: 'เลขบัตรประชาชน',   7: 'ที่อยู่(ข้อความ)', 8: 'เบอร์โทร',
+  29: 'เคยมา',
+  41: 'สถานะหมายเสด็จ',  42: 'รายละเอียดหมายเสด็จ',
+  43: 'ประเภทสถานที่ตรวจพบ', 44: 'รายละเอียดสถานที่',
+  45: 'วันที่ตรวจพบ',    46: 'เวลาตรวจพบ',
+  47: 'ยศเจ้าหน้าที่',   48: 'ชื่อเจ้าหน้าที่',  49: 'โทรเจ้าหน้าที่',
+  50: 'วันส่งมอบ',       51: 'เวลาส่งมอบ',
+  52: 'การซ่อนเร้น',     53: 'รายละเอียดซ่อนเร้น',
+  54: 'วิธีพกพา',        55: 'ประเภทภาชนะ',
+  56: 'สภาพซอง',         57: 'ขนาดซอง',          59: 'สีซอง',
+  63: 'บ้านเลขที่(ปัจจุบัน)',  64: 'หมู่(ปัจจุบัน)',    65: 'ซอย(ปัจจุบัน)',
+  66: 'ถนน(ปัจจุบัน)',   67: 'ตำบล/แขวง(ปัจจุบัน)', 68: 'อำเภอ/เขต(ปัจจุบัน)', 69: 'จังหวัด(ปัจจุบัน)',
+  71: 'บ้านเลขที่(ภูมิลำเนา)', 75: 'ตำบล/แขวง(ภูมิลำเนา)', 76: 'อำเภอ/เขต(ภูมิลำเนา)', 77: 'จังหวัด(ภูมิลำเนา)',
+  84: 'สถานะที่พัก กทม',
+  89: 'ตำบล/แขวง(ที่พัก กทม)', 90: 'อำเภอ/เขต(ที่พัก กทม)', 91: 'จังหวัด(ที่พัก กทม)',
+  93: 'ตำแหน่งเจ้าหน้าที่',
+  101: 'ระดับการศึกษา',  102: 'สถานที่ศึกษา',    103: 'อาชีพ',        104: 'รายได้',
+  105: 'ชื่อบิดา',       107: 'ชื่อมารดา',        109: 'ชื่อผู้ปกครอง',
+  111: 'จำนวนเคยเข้าเฝ้า', 112: 'ประเภทคดี',
+  143: 'จำนวนเยี่ยมพระบรมมหาราชวัง',
+  148: 'สถานะเอกสาร',    149: 'วันส่งเอกสาร',     150: 'รายละเอียดเอกสาร',
+  151: 'ปลายทางหลังยื่นฎีกา'
+};
+
+function getOrCreateAuditLogSheet() {
+  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(AUDIT_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(AUDIT_SHEET_NAME);
+    sheet.getRange(1, 1, 1, 15).setValues([[
+      'AuditID','Timestamp','UserID','Username','DisplayName','Role',
+      'Action','RecordID','Target','OldValue','NewValue',
+      'Metadata','SessionKey','Client','Status'
+    ]]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function initAuditLog() {
+  var sheet = getOrCreateAuditLogSheet();
+  return { success: true, message: 'AuditLog sheet ready. Rows: ' + (sheet.getLastRow() - 1) };
+}
+
+function writeAuditLog(opts) {
+  try {
+    var auditSheet = getOrCreateAuditLogSheet();
+    var sess = null;
+    if (opts.token) { try { sess = getSession(opts.token); } catch(ex) {} }
+    var userId      = (sess && sess.userId)      || opts.userId      || '';
+    var username    = (sess && sess.username)    || opts.username    || '';
+    var displayName = (sess && sess.displayName) || opts.displayName || '';
+    var role        = (sess && sess.role)        || opts.role        || '';
+    var metaStr     = '';
+    if (opts.metadata !== null && opts.metadata !== undefined) {
+      try { metaStr = typeof opts.metadata === 'string' ? opts.metadata : JSON.stringify(opts.metadata); } catch(ex) {}
+    }
+    auditSheet.appendRow([
+      Utilities.getUuid(),
+      Utilities.formatDate(new Date(), 'Asia/Bangkok', "yyyy-MM-dd'T'HH:mm:ss"),
+      userId, username, displayName, role,
+      opts.action || '', opts.recordId || '', opts.target || '',
+      (opts.oldVal !== null && opts.oldVal !== undefined) ? String(opts.oldVal) : '',
+      (opts.newVal !== null && opts.newVal !== undefined) ? String(opts.newVal) : '',
+      metaStr,
+      opts.token ? String(opts.token).substring(0, 8) : '',
+      'GAS',
+      opts.status || 'SUCCESS'
+    ]);
+  } catch(e) {
+    Logger.log('writeAuditLog error: ' + e.toString());
+  }
+}
+
+function batchWriteAuditLogs(entries) {
+  try {
+    if (!entries || !entries.length) return;
+    var auditSheet = getOrCreateAuditLogSheet();
+    // Resolve session once — all entries share the same actor
+    var sess   = null;
+    var token0 = entries[0] && entries[0].token;
+    if (token0) { try { sess = getSession(token0); } catch(ex) {} }
+    var rows = entries.map(function(opts) {
+      var userId      = (sess && sess.userId)      || opts.userId      || '';
+      var username    = (sess && sess.username)    || opts.username    || '';
+      var displayName = (sess && sess.displayName) || opts.displayName || '';
+      var role        = (sess && sess.role)        || opts.role        || '';
+      var metaStr     = '';
+      if (opts.metadata !== null && opts.metadata !== undefined) {
+        try { metaStr = typeof opts.metadata === 'string' ? opts.metadata : JSON.stringify(opts.metadata); } catch(ex) {}
+      }
+      return [
+        Utilities.getUuid(),
+        Utilities.formatDate(new Date(), 'Asia/Bangkok', "yyyy-MM-dd'T'HH:mm:ss"),
+        userId, username, displayName, role,
+        opts.action || '', opts.recordId || '', opts.target || '',
+        (opts.oldVal !== null && opts.oldVal !== undefined) ? String(opts.oldVal) : '',
+        (opts.newVal !== null && opts.newVal !== undefined) ? String(opts.newVal) : '',
+        metaStr,
+        opts.token ? String(opts.token).substring(0, 8) : '',
+        'GAS',
+        opts.status || 'SUCCESS'
+      ];
+    });
+    var startRow = auditSheet.getLastRow() + 1;
+    auditSheet.getRange(startRow, 1, rows.length, 15).setValues(rows);
+  } catch(e) {
+    Logger.log('batchWriteAuditLogs error: ' + e.toString());
+  }
+}
+
+function listAuditLogs(data, token) {
+  var auditSheet   = getOrCreateAuditLogSheet();
+  if (auditSheet.getLastRow() <= 1) return { success: true, entries: [], total: 0, page: 1, pageSize: 50 };
+  var page         = Math.max(1, parseInt(data.page         || '1'));
+  var pageSize     = Math.min(200, Math.max(1, parseInt(data.pageSize  || '50')));
+  var dateFrom     = (data.dateFrom     || '').toString().trim();
+  var dateTo       = (data.dateTo       || '').toString().trim();
+  var usernameF    = (data.username     || '').toString().trim().toLowerCase();
+  var filterAction = (data.filterAction || '').toString().trim();
+  var recordIdF    = (data.recordId     || '').toString().trim();
+  var lastRow      = auditSheet.getLastRow();
+  var vals         = auditSheet.getRange(2, 1, lastRow - 1, 15).getValues();
+  var filtered = [];
+  for (var i = 0; i < vals.length; i++) {
+    var r  = vals[i];
+    var ts = String(r[1] || '');
+    if (dateFrom && ts < dateFrom) continue;
+    if (dateTo   && ts > dateTo + 'T23:59:59') continue;
+    if (usernameF    && String(r[3] || '').toLowerCase().indexOf(usernameF)    === -1) continue;
+    if (filterAction && String(r[6]) !== filterAction) continue;
+    if (recordIdF    && String(r[7]) !== recordIdF) continue;
+    filtered.push(r);
+  }
+  filtered.reverse(); // newest first
+  var total    = filtered.length;
+  var startIdx = (page - 1) * pageSize;
+  var pageData = filtered.slice(startIdx, startIdx + pageSize);
+  var entries  = pageData.map(function(r) {
+    return {
+      auditId: r[0], timestamp: r[1], userId: r[2], username: r[3],
+      displayName: r[4], role: r[5], action: r[6], recordId: r[7],
+      target: r[8], oldValue: r[9], newValue: r[10],
+      metadata: r[11], sessionKey: r[12], client: r[13], status: r[14]
+    };
+  });
+  return { success: true, entries: entries, total: total, page: page, pageSize: pageSize };
+}
+
+function auditExport(data, token) {
+  var exportType   = (data.exportType || '').toString();
+  var allowedTypes = ['EXPORT_EXCEL', 'EXPORT_PDF_SUMMARY', 'EXPORT_PDF_INDIVIDUAL'];
+  if (allowedTypes.indexOf(exportType) === -1) return { success: false, message: 'exportType ไม่ถูกต้อง' };
+  writeAuditLog({
+    action:   exportType,
+    token:    token,
+    metadata: { scope: data.scope || '', count: parseInt(data.count || '0') },
+    status:   'SUCCESS'
+  });
+  return { success: true };
 }
 
 // ===== THAILAND GEOGRAPHY (public GET, cached 6h) =====

@@ -175,6 +175,9 @@
         <button class="btn btn-outline-warning btn-sm d-none" id="btnUserMgmt" onclick="showUserMgmt()">
           <i class="fas fa-users-cog"></i> จัดการผู้ใช้
         </button>
+        <button class="btn btn-outline-info btn-sm d-none" id="btnAuditLog" onclick="openAuditLog()">
+          <i class="fas fa-history"></i> ประวัติ
+        </button>
         <div class="dropdown d-none" id="exportDropdownWrapper">
           <button class="btn btn-outline-warning btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
             <i class="fas fa-download"></i> ส่งออก
@@ -1132,6 +1135,116 @@
     </div>
   </div>
 
+  <!-- ===== AUDIT LOG MODAL ===== -->
+  <div class="modal fade" id="auditLogModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-dark text-white">
+          <h5 class="modal-title"><i class="fas fa-history"></i> ประวัติการใช้งาน (Audit Log)</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-3">
+          <!-- Filters -->
+          <div class="row g-2 mb-3 align-items-end">
+            <div class="col-6 col-md-2">
+              <label class="form-label form-label-sm fw-semibold mb-1">จากวันที่</label>
+              <input type="date" id="auditDateFrom" class="form-control form-control-sm">
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label form-label-sm fw-semibold mb-1">ถึงวันที่</label>
+              <input type="date" id="auditDateTo" class="form-control form-control-sm">
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label form-label-sm fw-semibold mb-1">ชื่อผู้ใช้</label>
+              <input type="text" id="auditUsername" class="form-control form-control-sm" placeholder="username">
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label form-label-sm fw-semibold mb-1">ประเภทการกระทำ</label>
+              <select id="auditFilterAction" class="form-select form-select-sm">
+                <option value="">-- ทุกประเภท --</option>
+                <optgroup label="เข้า/ออกระบบ">
+                  <option value="LOGIN_SUCCESS">เข้าสู่ระบบสำเร็จ</option>
+                  <option value="LOGIN_FAILED">เข้าสู่ระบบล้มเหลว</option>
+                </optgroup>
+                <optgroup label="ข้อมูล">
+                  <option value="CREATE_RECORD">บันทึกข้อมูลใหม่</option>
+                  <option value="UPDATE_RECORD">แก้ไขข้อมูล</option>
+                  <option value="UPDATE_FIELD">แก้ไขฟิลด์</option>
+                  <option value="DELETE_RECORD">ลบข้อมูล</option>
+                </optgroup>
+                <optgroup label="ไฟล์แนบ">
+                  <option value="UPLOAD_ATTACHMENT">อัปโหลดรูป</option>
+                  <option value="DELETE_ATTACHMENT">ลบรูป</option>
+                </optgroup>
+                <optgroup label="ส่งออก">
+                  <option value="EXPORT_EXCEL">Export Excel</option>
+                  <option value="EXPORT_PDF_SUMMARY">Export PDF สรุป</option>
+                  <option value="EXPORT_PDF_INDIVIDUAL">Export PDF รายบุคคล</option>
+                </optgroup>
+                <optgroup label="ผู้ใช้งาน">
+                  <option value="USER_CREATE">สร้างบัญชีผู้ใช้</option>
+                  <option value="USER_UPDATE">แก้ไขข้อมูลผู้ใช้</option>
+                  <option value="USER_ROLE_CHANGE">เปลี่ยนสิทธิ์</option>
+                  <option value="USER_ACTIVATE">เปิดใช้งาน</option>
+                  <option value="USER_DEACTIVATE">ระงับการใช้งาน</option>
+                  <option value="USER_PASSWORD_RESET">รีเซ็ตรหัสผ่าน</option>
+                </optgroup>
+              </select>
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label form-label-sm fw-semibold mb-1">RecordID</label>
+              <input type="text" id="auditRecordId" class="form-control form-control-sm" placeholder="เช่น 523">
+            </div>
+            <div class="col-6 col-md-2 d-flex gap-2">
+              <button class="btn btn-sm btn-primary flex-fill" onclick="loadAuditLogs(1)">
+                <i class="fas fa-search"></i> ค้นหา
+              </button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="clearAuditFilters()" title="ล้างตัวกรอง">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+          <!-- Table -->
+          <div class="table-responsive" style="max-height: 55vh; overflow-y: auto;">
+            <table class="table table-sm table-hover table-bordered mb-0" style="font-size: 0.82rem;">
+              <thead class="table-dark" style="position: sticky; top: 0; z-index: 1;">
+                <tr>
+                  <th style="min-width:130px">วันเวลา</th>
+                  <th style="min-width:100px">ผู้ใช้</th>
+                  <th style="min-width:75px">สิทธิ์</th>
+                  <th style="min-width:130px">การกระทำ</th>
+                  <th style="min-width:70px">RecordID</th>
+                  <th style="min-width:120px">รายการ/Target</th>
+                  <th style="min-width:120px">ค่าเดิม</th>
+                  <th style="min-width:120px">ค่าใหม่</th>
+                  <th style="min-width:65px">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody id="auditTableBody">
+                <tr><td colspan="9" class="text-center text-muted py-3">กำลังโหลด...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Pagination -->
+          <div class="d-flex align-items-center justify-content-between mt-2">
+            <small class="text-muted" id="auditPagInfo">-</small>
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-secondary" id="auditPrevBtn" onclick="loadAuditLogs(auditCurrentPage - 1)" disabled>
+                <i class="fas fa-chevron-left"></i> ก่อนหน้า
+              </button>
+              <button class="btn btn-outline-secondary" id="auditNextBtn" onclick="loadAuditLogs(auditCurrentPage + 1)" disabled>
+                ถัดไป <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times"></i> ปิด</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== DELETE CONFIRM MODAL ===== -->
   <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -1184,16 +1297,19 @@
     var currentAmphoeMap  = {};
     var domicileAmphoeMap = {};
     var bangkokAmphoeMap  = {};
+    var auditCurrentPage  = 1;
+    var auditLogModal     = null;
 
     const CLIENT_PERMISSIONS = {
       viewer:      ['view_dashboard', 'view_records'],
       report:      ['view_dashboard', 'view_records', 'export_records'],
       operator:    ['view_dashboard', 'view_records', 'create_record', 'upload_attachment'],
       admin:       ['view_dashboard', 'view_records', 'create_record', 'upload_attachment',
-                    'edit_record', 'delete_record', 'export_records', 'manage_attachments'],
+                    'edit_record', 'delete_record', 'export_records', 'manage_attachments',
+                    'view_audit'],
       super_admin: ['view_dashboard', 'view_records', 'create_record', 'upload_attachment',
                     'edit_record', 'delete_record', 'export_records', 'manage_attachments',
-                    'manage_users', 'manage_system']
+                    'manage_users', 'manage_system', 'view_audit']
     };
     const ROLE_LABELS = {
       viewer:      { label: 'ดูข้อมูล',        cls: 'bg-secondary' },
@@ -1229,6 +1345,7 @@
       detailModal        = new bootstrap.Modal(document.getElementById('detailModal'));
       deleteConfirmModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
       userMgmtModal      = new bootstrap.Modal(document.getElementById('userMgmtModal'));
+      auditLogModal      = new bootstrap.Modal(document.getElementById('auditLogModal'));
 
       // Restore session from sessionStorage
       try {
@@ -1333,9 +1450,11 @@
     function updateNavUserDisplay() {
       const navDisp = document.getElementById('navUserDisplay');
       const btnUM   = document.getElementById('btnUserMgmt');
+      const btnAL   = document.getElementById('btnAuditLog');
       if (!currentUser) {
         navDisp.classList.add('d-none');
-        btnUM.classList.add('d-none');
+        if (btnUM) btnUM.classList.add('d-none');
+        if (btnAL) btnAL.classList.add('d-none');
         return;
       }
       navDisp.classList.remove('d-none');
@@ -1346,6 +1465,10 @@
       badge.textContent = ri.label;
       if (hasClientPerm('manage_users')) btnUM.classList.remove('d-none');
       else btnUM.classList.add('d-none');
+      if (btnAL) {
+        if (hasClientPerm('view_audit')) btnAL.classList.remove('d-none');
+        else btnAL.classList.add('d-none');
+      }
     }
 
     function applyRoleUI() {
@@ -1361,6 +1484,8 @@
       if (delBtn)  delBtn.classList.toggle('d-none', !hasClientPerm('delete_record'));
       if (pdfBtn)  pdfBtn.classList.toggle('d-none', !hasClientPerm('export_records'));
       if (expDdWr) expDdWr.classList.toggle('d-none', !hasClientPerm('export_records'));
+      const btnAL2 = document.getElementById('btnAuditLog');
+      if (btnAL2) btnAL2.classList.toggle('d-none', !hasClientPerm('view_audit'));
     }
 
     // ==================== TOAST ====================
@@ -3259,6 +3384,121 @@
       ];
     })();
 
+    // ==================== AUDIT LOG ====================
+
+    const AUDIT_ACTION_LABELS = {
+      LOGIN_SUCCESS:          'เข้าสู่ระบบสำเร็จ',
+      LOGIN_FAILED:           'เข้าสู่ระบบล้มเหลว',
+      CREATE_RECORD:          'บันทึกข้อมูลใหม่',
+      UPDATE_RECORD:          'แก้ไขข้อมูล',
+      UPDATE_FIELD:           'แก้ไขฟิลด์',
+      DELETE_RECORD:          'ลบข้อมูล',
+      UPLOAD_ATTACHMENT:      'อัปโหลดรูป',
+      DELETE_ATTACHMENT:      'ลบรูป',
+      EXPORT_EXCEL:           'Export Excel',
+      EXPORT_PDF_SUMMARY:     'Export PDF สรุป',
+      EXPORT_PDF_INDIVIDUAL:  'Export PDF รายบุคคล',
+      USER_CREATE:            'สร้างบัญชีผู้ใช้',
+      USER_UPDATE:            'แก้ไขข้อมูลผู้ใช้',
+      USER_ROLE_CHANGE:       'เปลี่ยนสิทธิ์',
+      USER_ACTIVATE:          'เปิดใช้งาน',
+      USER_DEACTIVATE:        'ระงับการใช้งาน',
+      USER_PASSWORD_RESET:    'รีเซ็ตรหัสผ่าน'
+    };
+
+    function openAuditLog() {
+      if (!hasClientPerm('view_audit')) { showToast('ไม่มีสิทธิ์ดูประวัติการใช้งาน', 'danger'); return; }
+      if (!auditLogModal) auditLogModal = new bootstrap.Modal(document.getElementById('auditLogModal'));
+      auditLogModal.show();
+      loadAuditLogs(1);
+    }
+
+    function loadAuditLogs(page) {
+      if (!adminSession) return;
+      auditCurrentPage = Math.max(1, page || 1);
+      var params = {
+        action:       'listAuditLogs',
+        token:        adminSession,
+        page:         auditCurrentPage,
+        pageSize:     50
+      };
+      var df = (document.getElementById('auditDateFrom')    || {}).value || '';
+      var dt = (document.getElementById('auditDateTo')      || {}).value || '';
+      var un = ((document.getElementById('auditUsername')   || {}).value || '').trim();
+      var ac = (document.getElementById('auditFilterAction')|| {}).value || '';
+      var ri = ((document.getElementById('auditRecordId')   || {}).value || '').trim();
+      if (df) params.dateFrom     = df;
+      if (dt) params.dateTo       = dt;
+      if (un) params.username     = un;
+      if (ac) params.filterAction = ac;
+      if (ri) params.recordId     = ri;
+
+      var tbody = document.getElementById('auditTableBody');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin me-2"></i>กำลังโหลด...</td></tr>';
+
+      gasPost(params).then(function(data) {
+        if (!data.success) {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-3">' + escHtml(data.message || 'โหลดไม่สำเร็จ') + '</td></tr>';
+          return;
+        }
+        renderAuditTable(data.entries || [], data.total || 0, data.page || 1, data.pageSize || 50);
+      }).catch(function(e) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-3">เกิดข้อผิดพลาด: ' + escHtml(String(e)) + '</td></tr>';
+      });
+    }
+
+    function renderAuditTable(entries, total, page, pageSize) {
+      var tbody  = document.getElementById('auditTableBody');
+      var pagEl  = document.getElementById('auditPagInfo');
+      var prevBtn = document.getElementById('auditPrevBtn');
+      var nextBtn = document.getElementById('auditNextBtn');
+      var start   = total === 0 ? 0 : (page - 1) * pageSize + 1;
+      var end     = Math.min(page * pageSize, total);
+      if (pagEl) pagEl.textContent = total === 0 ? 'ไม่พบรายการ' : ('แสดง ' + start + '–' + end + ' จาก ' + total + ' รายการ');
+      if (prevBtn) prevBtn.disabled = (page <= 1);
+      if (nextBtn) nextBtn.disabled = (end >= total);
+      if (!tbody) return;
+      if (!entries.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">ไม่พบรายการที่ตรงตามเงื่อนไข</td></tr>';
+        return;
+      }
+      var ROLE_TH = { viewer: 'ดูข้อมูล', report: 'รายงาน', operator: 'เจ้าหน้าที่', admin: 'ผู้ดูแล', super_admin: 'ซุปเปอร์แอดมิน' };
+      var STATUS_CLS = { SUCCESS: 'text-success', FAILED: 'text-danger' };
+      var rows = entries.map(function(e) {
+        var actionLabel = AUDIT_ACTION_LABELS[e.action] || e.action;
+        var actionCls   = e.action.indexOf('FAILED') !== -1 || e.action.indexOf('DELETE') !== -1 ? 'text-danger fw-semibold'
+                        : e.action.indexOf('SUCCESS') !== -1 || e.action.indexOf('CREATE') !== -1 ? 'text-success fw-semibold'
+                        : e.action.indexOf('UPDATE') !== -1 ? 'text-primary' : '';
+        var roleTh  = ROLE_TH[e.role] || e.role || '-';
+        var oldV    = e.oldValue ? '<span class="text-truncate d-inline-block" style="max-width:110px" title="' + escHtml(String(e.oldValue)) + '">' + escHtml(String(e.oldValue).substring(0, 40)) + '</span>' : '<span class="text-muted">-</span>';
+        var newV    = e.newValue ? '<span class="text-truncate d-inline-block" style="max-width:110px" title="' + escHtml(String(e.newValue)) + '">' + escHtml(String(e.newValue).substring(0, 40)) + '</span>' : '<span class="text-muted">-</span>';
+        var target  = e.target   ? escHtml(String(e.target).substring(0, 40)) : '<span class="text-muted">-</span>';
+        var statCls = STATUS_CLS[e.status] || '';
+        return '<tr>' +
+          '<td class="text-nowrap">' + escHtml(String(e.timestamp || '').replace('T', ' ')) + '</td>' +
+          '<td>' + escHtml(e.displayName || e.username || '-') + '<br><small class="text-muted">' + escHtml(e.username || '') + '</small></td>' +
+          '<td><small>' + escHtml(roleTh) + '</small></td>' +
+          '<td class="' + actionCls + '">' + escHtml(actionLabel) + '</td>' +
+          '<td class="text-center">' + (e.recordId ? escHtml(String(e.recordId)) : '<span class="text-muted">-</span>') + '</td>' +
+          '<td>' + target + '</td>' +
+          '<td>' + oldV + '</td>' +
+          '<td>' + newV + '</td>' +
+          '<td class="' + statCls + ' text-center fw-bold">' + escHtml(e.status || '-') + '</td>' +
+          '</tr>';
+      });
+      tbody.innerHTML = rows.join('');
+    }
+
+    function clearAuditFilters() {
+      ['auditDateFrom','auditDateTo','auditUsername','auditRecordId'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      var ac = document.getElementById('auditFilterAction');
+      if (ac) ac.value = '';
+      loadAuditLogs(1);
+    }
+
     function exportExcel(scope) {
       var data = getExportData(scope);
       if (!data.length) { showToast('ไม่มีข้อมูลที่จะส่งออก', 'warning'); return; }
@@ -3281,6 +3521,7 @@
       var lbl  = scope === 'all' ? 'All' : (scope === 'selected' ? 'Selected' : 'Filtered');
       XLSX.writeFile(wb, 'RW01_FullRaw_' + lbl + '_' + ds + '.xlsx');
       showToast('ส่งออก Excel ' + data.length + ' รายการ (' + headers.length + ' columns)', 'success');
+      gasPost({ action: 'auditExport', token: adminSession, exportType: 'EXPORT_EXCEL', scope: scope, count: data.length }).catch(function(){});
     }
 
     function exportPDFSummary(scope) {
@@ -3319,6 +3560,7 @@
       if (!win) { showToast('กรุณาอนุญาต Pop-up ก่อน', 'warning'); return; }
       win.document.write(html);
       win.document.close();
+      gasPost({ action: 'auditExport', token: adminSession, exportType: 'EXPORT_PDF_SUMMARY', scope: scope, count: data.length }).catch(function(){});
     }
 
     function fixMissingZero(val, type) {
@@ -3342,6 +3584,7 @@
         const res = await gasPost({ action: 'listExportAttachments', token: adminSession, recordId });
         if (!res.success) { showToast(res.message || 'โหลดรูปไม่สำเร็จ', 'danger'); return; }
         openPdfWindow(item, res.attachments || {});
+        gasPost({ action: 'auditExport', token: adminSession, exportType: 'EXPORT_PDF_INDIVIDUAL', scope: 'individual', count: 1 }).catch(function(){});
       } catch(e) {
         showToast('เกิดข้อผิดพลาด: ' + e, 'danger');
       } finally {
