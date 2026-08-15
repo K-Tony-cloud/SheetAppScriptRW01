@@ -66,7 +66,7 @@ function doPost(e) {
     var action = data.action || '';
     var token  = data.token  || '';
     if      (action === 'loginUser')   result = loginUser(data.username || '', data.password || '');
-    else if (action === 'login')       result = loginAdmin(data.password || '');
+    else if (action === 'login')       result = { success: false, message: 'ช่องทางนี้ไม่รองรับแล้ว กรุณาใช้ loginUser' };
     else if (action === 'logout')      result = logoutAdmin(token);
     else if (action === 'dashboard')   result = getDashboardData(token);
     else if (action === 'submit') {
@@ -193,6 +193,13 @@ function getAdminPassword() {
 // New user-based login with username + hashed password
 function loginUser(username, password) {
   if (!username || !password) return { success: false, message: 'ต้องระบุชื่อผู้ใช้และรหัสผ่าน' };
+  // Rate limit: max 10 failed attempts per username per 10 minutes
+  var _rl    = CacheService.getScriptCache();
+  var _rlKey = 'loginrl_' + username.toLowerCase().substring(0, 30);
+  var _fails = parseInt(_rl.get(_rlKey) || '0');
+  if (_fails >= 10) {
+    return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่ภายหลัง' };
+  }
   var sheet   = getOrCreateUsersSheet();
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) return { success: false, message: 'ยังไม่มีบัญชีผู้ใช้ในระบบ กรุณาติดต่อผู้ดูแลระบบ' };
@@ -205,19 +212,23 @@ function loginUser(username, password) {
     }
   }
   if (!userRow) {
+    _rl.put(_rlKey, String(_fails + 1), 600);
     writeAuditLog({ action: 'LOGIN_FAILED', username: username, status: 'FAILED', metadata: { reason: 'user_not_found' } });
     return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
   }
   if (!userRow[6]) {
+    _rl.put(_rlKey, String(_fails + 1), 600);
     writeAuditLog({ action: 'LOGIN_FAILED', username: username, userId: String(userRow[0]), displayName: String(userRow[4]), role: String(userRow[5]), status: 'FAILED', metadata: { reason: 'account_disabled' } });
-    return { success: false, message: 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ' };
+    return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
   }
   var expectedHash = hashPassword(password, String(userRow[3]));
   if (expectedHash !== String(userRow[2])) {
+    _rl.put(_rlKey, String(_fails + 1), 600);
     writeAuditLog({ action: 'LOGIN_FAILED', username: username, userId: String(userRow[0]), displayName: String(userRow[4]), role: String(userRow[5]), status: 'FAILED', metadata: { reason: 'wrong_password' } });
     return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
   }
 
+  try { _rl.remove(_rlKey); } catch(ex) {}
   var token   = Utilities.getUuid();
   var session = { userId: String(userRow[0]), role: String(userRow[5]), displayName: String(userRow[4]), username: String(userRow[1]) };
   CacheService.getScriptCache().put('sess_' + token, JSON.stringify(session), SESSION_TTL_SECS);
@@ -276,12 +287,16 @@ function getSession(token) {
 }
 
 function validateSession(token) {
-  return getSession(token) !== null;
+  var session = getSession(token);
+  if (!session) return false;
+  try { if (CacheService.getScriptCache().get('deact_' + session.userId)) return false; } catch(ex) {}
+  return true;
 }
 
 function hasPermission(token, permission) {
   var session = getSession(token);
   if (!session) return false;
+  try { if (CacheService.getScriptCache().get('deact_' + session.userId)) return false; } catch(ex) {}
   var perms = PERMISSIONS[session.role] || [];
   return perms.indexOf(permission) !== -1;
 }
@@ -332,12 +347,28 @@ function updateUser(data, token) {
   var vals = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(data.userId)) {
+      var isSA           = String(vals[i][5]) === 'super_admin';
+      var willDowngrade  = data.role !== undefined && PERMISSIONS[data.role] && data.role !== 'super_admin';
+      var willDeactivate = data.active !== undefined && !data.active;
+      if (isSA && (willDowngrade || willDeactivate)) {
+        var remainingSA = 0;
+        for (var j = 0; j < vals.length; j++) {
+          if (j === i) continue;
+          if (String(vals[j][5]) === 'super_admin' && !!vals[j][6]) remainingSA++;
+        }
+        if (remainingSA === 0) {
+          return { success: false, message: 'ไม่สามารถดำเนินการได้: ต้องมี super_admin ที่ active อย่างน้อย 1 คนในระบบ' };
+        }
+      }
       var rowNum = i + 2;
       var now    = new Date().toISOString();
       if (data.displayName !== undefined) sheet.getRange(rowNum, 5).setValue(data.displayName);
       if (data.role !== undefined && PERMISSIONS[data.role]) sheet.getRange(rowNum, 6).setValue(data.role);
       if (data.active !== undefined) sheet.getRange(rowNum, 7).setValue(!!data.active);
       sheet.getRange(rowNum, 10).setValue(now);
+      if (willDeactivate) {
+        try { CacheService.getScriptCache().put('deact_' + String(data.userId), '1', SESSION_TTL_SECS); } catch(ex) {}
+      }
       var uAction = data.role !== undefined ? 'USER_ROLE_CHANGE'
                   : (data.active !== undefined ? (data.active ? 'USER_ACTIVATE' : 'USER_DEACTIVATE')
                   : 'USER_UPDATE');
