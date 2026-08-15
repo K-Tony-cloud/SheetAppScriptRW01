@@ -99,7 +99,7 @@ function doPost(e) {
     else if (action === 'createUser')          result = createUser(data, token);
     else if (action === 'updateUser')          result = updateUser(data, token);
     else if (action === 'resetUserPassword')   result = resetUserPassword(data, token);
-    else if (action === 'initUserSystem')      result = initUserSystem();
+    else if (action === 'initUserSystem')      result = { success: false, message: 'Initialization endpoint disabled' };
     else if (action === 'initMetadataColumns') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initMetadataColumns();
@@ -232,6 +232,7 @@ function loginUser(username, password) {
   var token   = Utilities.getUuid();
   var session = { userId: String(userRow[0]), role: String(userRow[5]), displayName: String(userRow[4]), username: String(userRow[1]) };
   CacheService.getScriptCache().put('sess_' + token, JSON.stringify(session), SESSION_TTL_SECS);
+  try { CacheService.getScriptCache().remove('rolerev_' + session.userId); } catch(ex) {}
   writeAuditLog({ action: 'LOGIN_SUCCESS', token: token, userId: String(userRow[0]), username: String(userRow[1]), displayName: String(userRow[4]), role: String(userRow[5]), status: 'SUCCESS' });
 
   var now = new Date().toISOString();
@@ -290,6 +291,10 @@ function validateSession(token) {
   var session = getSession(token);
   if (!session) return false;
   try { if (CacheService.getScriptCache().get('deact_' + session.userId)) return false; } catch(ex) {}
+  try {
+    var _rv = CacheService.getScriptCache().get('rolerev_' + session.userId);
+    if (_rv !== null && _rv !== session.role) return false;
+  } catch(ex) {}
   return true;
 }
 
@@ -297,6 +302,10 @@ function hasPermission(token, permission) {
   var session = getSession(token);
   if (!session) return false;
   try { if (CacheService.getScriptCache().get('deact_' + session.userId)) return false; } catch(ex) {}
+  try {
+    var _rv = CacheService.getScriptCache().get('rolerev_' + session.userId);
+    if (_rv !== null && _rv !== session.role) return false;
+  } catch(ex) {}
   var perms = PERMISSIONS[session.role] || [];
   return perms.indexOf(permission) !== -1;
 }
@@ -363,7 +372,10 @@ function updateUser(data, token) {
       var rowNum = i + 2;
       var now    = new Date().toISOString();
       if (data.displayName !== undefined) sheet.getRange(rowNum, 5).setValue(data.displayName);
-      if (data.role !== undefined && PERMISSIONS[data.role]) sheet.getRange(rowNum, 6).setValue(data.role);
+      if (data.role !== undefined && PERMISSIONS[data.role]) {
+        sheet.getRange(rowNum, 6).setValue(data.role);
+        try { CacheService.getScriptCache().put('rolerev_' + String(data.userId), data.role, SESSION_TTL_SECS); } catch(ex) {}
+      }
       if (data.active !== undefined) sheet.getRange(rowNum, 7).setValue(!!data.active);
       sheet.getRange(rowNum, 10).setValue(now);
       if (willDeactivate) {
