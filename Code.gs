@@ -550,8 +550,7 @@ function updateData(sheetRowNum, formObject, token) {
     var skipIdx      = { 0: true, 61: true, 62: true }; // RecordID, CreatedAt, UpdatedAt
     for (var fi = 0; fi < updatedRow.length; fi++) {
       if (skipIdx[fi]) continue;
-      var fl = FIELD_LABEL_MAP[fi];
-      if (!fl) continue;
+      var fl = FIELD_LABEL_MAP[fi] || ('col' + (fi + 1));
       var ov = String(existingVals[fi] !== null && existingVals[fi] !== undefined ? existingVals[fi] : '').replace(/^'/, '');
       var nv = String(updatedRow[fi] !== null && updatedRow[fi] !== undefined ? updatedRow[fi] : '');
       if (ov === nv) continue;
