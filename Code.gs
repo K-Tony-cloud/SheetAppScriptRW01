@@ -145,8 +145,12 @@ function doPost(e) {
       else result = previewNormalizeEventDates();
     }
     else if (action === 'migrateEventDates') {
+      // DISABLED: col B stores valid Date objects — string rewrite is not safe.
+      result = { success: false, message: 'migrateEventDates disabled — underlying Date objects must not be overwritten with text strings' };
+    }
+    else if (action === 'colBFormats') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
-      else result = migrateEventDatesToBuddhistDMY();
+      else result = checkColBFormats();
     }
     else if (action === 'initRecordIdCounter') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
@@ -993,7 +997,7 @@ function buildDataRow(recordId, f, existingVals) {
 
   return [
     recordId,
-    normalizeEventDateForStorage(col('col2')),  col('col3'),  col('col4'),  col('col5'),
+    isoStringToSheetDate(col('col2')),  col('col3'),  col('col4'),  col('col5'),
     col('col6'),  col('col7'),  col('col8'),  col('col9'),
     col('col10'), col('col11'), col('col12'), col('col13'),
     col('col14'), col('col15'), col('col16'), col('col17'),
@@ -2269,4 +2273,74 @@ function migrateEventDatesToBuddhistDMY() {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * Converts an HTML date-input string (YYYY-MM-DD, Gregorian) into a JS Date object
+ * that Google Sheets will store as a native date value.
+ *
+ * Uses Date.UTC midnight so the calendar date is unambiguous in Asia/Bangkok (+7):
+ *   UTC 00:00 = Bangkok 07:00 → same calendar date, no ±1-day drift.
+ *
+ * Returns '' for blank/invalid input so Sheets stores an empty cell, not a zero-date.
+ */
+function isoStringToSheetDate(s) {
+  if (!s) return '';
+  // If somehow a Date object arrives, pass it through unchanged
+  if (Object.prototype.toString.call(s) === '[object Date]' && !isNaN(s.getTime())) return s;
+  var str = String(s).trim();
+  if (!str) return '';
+  var m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return ''; // non-ISO string (shouldn't happen from <input type="date">)
+  return new Date(Date.UTC(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3])));
+}
+
+/**
+ * READ-ONLY diagnostic: returns spreadsheet locale, timezone, and unique col B number formats.
+ * Does not modify any data.
+ */
+function checkColBFormats() {
+  var ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet   = ss.getSheetByName(SHEET_NAME);
+  var locale   = ss.getSpreadsheetLocale();
+  var timezone = ss.getSpreadsheetTimeZone();
+  var lastRow  = sheet.getLastRow();
+  if (lastRow < 2) return { success: true, locale: locale, timezone: timezone, totalRows: 0, formats: [] };
+
+  var numRows = lastRow - 1;
+  var formats = sheet.getRange(2, 2, numRows, 1).getNumberFormats(); // [[fmt], [fmt], ...]
+  var rawVals = sheet.getRange(2, 2, numRows, 1).getValues();
+  var dispVals = sheet.getRange(2, 2, numRows, 1).getDisplayValues();
+  var recIds  = sheet.getRange(2, 1, numRows, 1).getValues();
+
+  var fmtCounts  = {};
+  var fmtSamples = {};
+  var dateCount = 0;
+
+  for (var i = 0; i < numRows; i++) {
+    var fmt   = formats[i][0];
+    var isDate = Object.prototype.toString.call(rawVals[i][0]) === '[object Date]' && !isNaN(rawVals[i][0].getTime());
+    if (isDate) dateCount++;
+    if (!fmtCounts[fmt]) { fmtCounts[fmt] = 0; fmtSamples[fmt] = []; }
+    fmtCounts[fmt]++;
+    if (fmtSamples[fmt].length < 3) {
+      fmtSamples[fmt].push({ sheetRow: i+2, recordId: String(recIds[i][0]), displayValue: dispVals[i][0], isDate: isDate });
+    }
+  }
+
+  var formatList = Object.keys(fmtCounts).map(function(fmt) {
+    return { format: fmt || '(general)', count: fmtCounts[fmt], samples: fmtSamples[fmt] };
+  });
+  formatList.sort(function(a, b) { return b.count - a.count; });
+
+  return {
+    success: true,
+    spreadsheetLocale: locale,
+    spreadsheetTimezone: timezone,
+    totalRows: numRows,
+    dateObjectCount: dateCount,
+    nonDateCount: numRows - dateCount,
+    uniqueFormatCount: formatList.length,
+    formats: formatList
+  };
 }
