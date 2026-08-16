@@ -1427,6 +1427,8 @@
     let currentViewItem = null;
     let editSheetRow = null;
     let currentEditRecordId = null;
+    var currentLockToken = null;
+    var editHeartbeatInterval = null;
     let sortCol = -1;
     let sortAsc = true;
     let activeCardFilter = 'all';
@@ -2429,11 +2431,45 @@
     }
 
     function editRecord(sheetRow, rowData) {
+      var recId = (rowData[0] || '').toString().trim();
+      gasPost({ action: 'acquireEditLock', token: adminSession, recordId: recId })
+        .then(function(r) {
+          if (!r.success) {
+            var msg = r.message || 'ไม่สามารถแก้ไขได้';
+            if (r.lockedBy) {
+              var exp = r.lockedBy.expiresAt ? ' (lock หมดอายุ: ' + r.lockedBy.expiresAt.substring(0,19).replace('T',' ') + ')' : '';
+              msg += exp;
+            }
+            if (currentUser && currentUser.role === 'super_admin') {
+              if (confirm(msg + '\n\nต้องการบังคับปลดล็อกหรือไม่?')) {
+                gasPost({ action: 'overrideEditLock', token: adminSession, recordId: recId })
+                  .then(function(ov) {
+                    if (ov.success) { showToast(ov.message || 'ปลดล็อกสำเร็จ', 'warning'); editRecord(sheetRow, rowData); }
+                    else showToast(ov.message || 'ปลดล็อกไม่สำเร็จ', 'danger');
+                  }).catch(function() { showToast('เกิดข้อผิดพลาด', 'danger'); });
+              }
+            } else {
+              showToast(msg, 'warning');
+            }
+            return;
+          }
+          currentLockToken = r.lockToken;
+          if (editHeartbeatInterval) clearInterval(editHeartbeatInterval);
+          editHeartbeatInterval = setInterval(function() {
+            if (!currentLockToken || !currentEditRecordId) return;
+            gasPost({ action: 'renewEditLock', token: adminSession, recordId: currentEditRecordId, lockToken: currentLockToken })
+              .then(function(rv) { if (!rv.success) showToast('สิทธิ์แก้ไขหมดอายุ กรุณาบันทึกหรือยกเลิก', 'warning'); })
+              .catch(function() {});
+          }, 5 * 60 * 1000);
+          _doEditFormSetup(sheetRow, rowData);
+        })
+        .catch(function() { showToast('ไม่สามารถล็อกรายการได้', 'danger'); });
+    }
+
+    function _doEditFormSetup(sheetRow, rowData) {
       editSheetRow = sheetRow;
       currentEditRecordId = (rowData[0] || '').toString().trim();
       const fullName = ((rowData[3] || '') + ' ' + (rowData[4] || '')).trim();
-
-      // Update form UI for edit mode
       document.getElementById('formTitle').innerHTML =
         '<i class="fas fa-edit text-warning"></i> แก้ไขข้อมูล';
       document.getElementById('editModeName').textContent = fullName;
@@ -2441,7 +2477,6 @@
       document.getElementById('submitBtn').innerHTML =
         '<i class="fas fa-save"></i> บันทึกการแก้ไข';
       document.getElementById('cancelEditBtn').classList.remove('d-none');
-
       initUploadState();
       populateFormForEdit(rowData);
       upLoadExisting(currentEditRecordId);
@@ -2548,6 +2583,9 @@
     }
 
     function cancelEdit() {
+      if (currentLockToken && currentEditRecordId) {
+        gasPost({ action: 'releaseEditLock', token: adminSession, recordId: currentEditRecordId, lockToken: currentLockToken }).catch(function() {});
+      }
       resetFormMode();
       document.getElementById('dataForm').reset();
       resetIncidentLocation();
@@ -2557,6 +2595,8 @@
     }
 
     function resetFormMode() {
+      currentLockToken = null;
+      if (editHeartbeatInterval) { clearInterval(editHeartbeatInterval); editHeartbeatInterval = null; }
       editSheetRow = null;
       currentEditRecordId = null;
       document.getElementById('formTitle').innerHTML =
@@ -2647,6 +2687,9 @@
           resetAddressGroups();
           initUploadState();
           if (isEdit) {
+            if (currentLockToken && currentEditRecordId) {
+              gasPost({ action: 'releaseEditLock', token: adminSession, recordId: currentEditRecordId, lockToken: currentLockToken }).catch(function() {});
+            }
             resetFormMode();
             refreshDashboard();
           } else {
@@ -2663,8 +2706,9 @@
       };
 
       if (isEdit) {
-        gasPost(Object.assign({ action: 'update', sheetRow: editSheetRow, token: adminSession }, formObject))
-          .then(onSuccess).catch(onFailure);
+        var editPayload = Object.assign({ action: 'update', sheetRow: editSheetRow, token: adminSession }, formObject);
+        editPayload.lockToken = currentLockToken;
+        gasPost(editPayload).then(onSuccess).catch(onFailure);
       } else {
         gasPost(Object.assign({ action: 'submit', token: adminSession }, formObject))
           .then(onSuccess).catch(onFailure);

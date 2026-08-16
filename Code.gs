@@ -4,6 +4,7 @@ const ATTACHMENTS_SHEET_NAME = "Attachments";
 const DRIVE_ROOT_FOLDER_NAME = "RW01 Uploads";
 const ADMIN_PASSWORD_DEFAULT = "123456";   // fallback only; prefer Script Properties
 const SESSION_TTL_SECS       = 3600;       // 1-hour session token
+const EDIT_LOCK_TTL          = 900;        // 15-minute edit lock
 
 // Phone / ID columns (1-based sheet col index) — force text storage
 const PHONE_COLS_1BASED = [7, 9, 27, 50, 107, 109, 111, 117, 132];
@@ -103,6 +104,10 @@ function doPost(e) {
     else if (action === 'resetUserPassword')   result = resetUserPassword(data, token);
     else if (action === 'changeMyPassword')      result = changeMyPassword(data, token);
     else if (action === 'updateMyDisplayName')  result = updateMyDisplayName(data, token);
+    else if (action === 'acquireEditLock')       result = acquireEditLock(data, token);
+    else if (action === 'releaseEditLock')       result = releaseEditLock(data, token);
+    else if (action === 'renewEditLock')         result = renewEditLock(data, token);
+    else if (action === 'overrideEditLock')      result = overrideEditLock(data, token);
     else if (action === 'initUserSystem')      result = { success: false, message: 'Initialization endpoint disabled' };
     else if (action === 'initMetadataColumns') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
@@ -455,6 +460,78 @@ function changeMyPassword(data, token) {
   return { success: false, message: 'ไม่พบบัญชีผู้ใช้' };
 }
 
+function getCacheJson(key) {
+  try { var r = CacheService.getScriptCache().get(key); return r ? JSON.parse(r) : null; } catch(e) { return null; }
+}
+
+function acquireEditLock(data, token) {
+  if (!hasPermission(token, 'edit_record')) return { success: false, message: 'ไม่มีสิทธิ์แก้ไขข้อมูล' };
+  var sess = getSession(token);
+  var recordId = String(data.recordId || '');
+  if (!recordId) return { success: false, message: 'ไม่ระบุ RecordID' };
+  var lockKey = 'editlock_' + recordId;
+  var existing = getCacheJson(lockKey);
+  var now = new Date();
+  if (existing) {
+    if (existing.userId === sess.userId) {
+      existing.expiresAt = new Date(now.getTime() + EDIT_LOCK_TTL * 1000).toISOString();
+      try { CacheService.getScriptCache().put(lockKey, JSON.stringify(existing), EDIT_LOCK_TTL); } catch(e) {}
+      return { success: true, lockToken: existing.lockToken, acquiredAt: existing.acquiredAt, expiresAt: existing.expiresAt };
+    }
+    return { success: false, message: 'รายการนี้กำลังถูกแก้ไขโดย ' + (existing.displayName || existing.username),
+             lockedBy: { displayName: existing.displayName, username: existing.username, acquiredAt: existing.acquiredAt, expiresAt: existing.expiresAt } };
+  }
+  var lockToken = Utilities.getUuid();
+  var acquiredAt = now.toISOString();
+  var expiresAt  = new Date(now.getTime() + EDIT_LOCK_TTL * 1000).toISOString();
+  var lock = { recordId: recordId, userId: sess.userId, username: sess.username, displayName: sess.displayName, role: sess.role, lockToken: lockToken, acquiredAt: acquiredAt, expiresAt: expiresAt };
+  try { CacheService.getScriptCache().put(lockKey, JSON.stringify(lock), EDIT_LOCK_TTL); } catch(e) {}
+  writeAuditLog({ action: 'EDIT_LOCK_ACQUIRE', token: token, recordId: recordId, status: 'SUCCESS' });
+  return { success: true, lockToken: lockToken, acquiredAt: acquiredAt, expiresAt: expiresAt };
+}
+
+function releaseEditLock(data, token) {
+  if (!validateSession(token)) return { success: false, message: 'Session หมดอายุ' };
+  var sess = getSession(token);
+  var recordId = String(data.recordId || '');
+  if (!recordId) return { success: false, message: 'ไม่ระบุ RecordID' };
+  var lockKey = 'editlock_' + recordId;
+  var existing = getCacheJson(lockKey);
+  if (!existing || existing.userId !== sess.userId || existing.lockToken !== String(data.lockToken || '')) {
+    return { success: false, message: 'ไม่พบ lock หรือ token ไม่ตรง' };
+  }
+  try { CacheService.getScriptCache().remove(lockKey); } catch(e) {}
+  writeAuditLog({ action: 'EDIT_LOCK_RELEASE', token: token, recordId: recordId, status: 'SUCCESS' });
+  return { success: true };
+}
+
+function renewEditLock(data, token) {
+  if (!validateSession(token)) return { success: false, message: 'Session หมดอายุ' };
+  var sess = getSession(token);
+  var recordId = String(data.recordId || '');
+  var lockKey = 'editlock_' + recordId;
+  var existing = getCacheJson(lockKey);
+  if (!existing || existing.userId !== sess.userId || existing.lockToken !== String(data.lockToken || '')) {
+    return { success: false, message: 'Lock หมดอายุหรือถูกยกเลิก' };
+  }
+  existing.expiresAt = new Date(new Date().getTime() + EDIT_LOCK_TTL * 1000).toISOString();
+  try { CacheService.getScriptCache().put(lockKey, JSON.stringify(existing), EDIT_LOCK_TTL); } catch(e) {}
+  return { success: true, expiresAt: existing.expiresAt };
+}
+
+function overrideEditLock(data, token) {
+  if (!hasPermission(token, 'manage_system')) return { success: false, message: 'เฉพาะ Super Admin เท่านั้น' };
+  var recordId = String(data.recordId || '');
+  if (!recordId) return { success: false, message: 'ไม่ระบุ RecordID' };
+  var lockKey = 'editlock_' + recordId;
+  var existing = getCacheJson(lockKey);
+  if (!existing) return { success: false, message: 'ไม่พบ lock สำหรับรายการนี้' };
+  var overriddenUser = existing.displayName || existing.username;
+  try { CacheService.getScriptCache().remove(lockKey); } catch(e) {}
+  writeAuditLog({ action: 'EDIT_LOCK_OVERRIDE', token: token, recordId: recordId, metadata: { overriddenUserId: existing.userId, overriddenUsername: existing.username }, status: 'SUCCESS' });
+  return { success: true, message: 'ปลดล็อกสำเร็จ (ยกเลิก lock ของ ' + overriddenUser + ')' };
+}
+
 function updateMyDisplayName(data, token) {
   if (!validateSession(token)) return { success: false, message: 'Session หมดอายุ กรุณาเข้าสู่ระบบใหม่' };
   var sess = getSession(token);
@@ -684,6 +761,13 @@ function updateData(sheetRowNum, formObject, token) {
   try {
     var sheet        = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
     var existingId   = sheet.getRange(sheetRowNum, 1).getValue();
+    var _sess = getSession(token);
+    if (_sess) {
+      var _lock = getCacheJson('editlock_' + String(existingId));
+      if (!_lock || _lock.userId !== _sess.userId || _lock.lockToken !== String(formObject.lockToken || '')) {
+        return { success: false, message: 'สิทธิ์แก้ไขรายการหมดอายุ กรุณาโหลดข้อมูลใหม่' };
+      }
+    }
     var lastCol      = Math.max(152, sheet.getLastColumn());
     var existingVals = sheet.getRange(sheetRowNum, 1, 1, lastCol).getValues()[0];
     var updatedRow   = buildDataRow(existingId, formObject, existingVals);
