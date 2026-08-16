@@ -6,6 +6,12 @@ const ADMIN_PASSWORD_DEFAULT = "123456";   // fallback only; prefer Script Prope
 const SESSION_TTL_SECS       = 3600;       // 1-hour session token
 const EDIT_LOCK_TTL          = 900;        // 15-minute edit lock
 
+// Soft-delete column indices (1-based sheet columns)
+const SOFT_DEL_STATUS_COL  = 153; // col153: 'deleted' or ''
+const SOFT_DEL_AT_COL      = 154; // col154: ISO timestamp
+const SOFT_DEL_BY_ID_COL   = 155; // col155: userId
+const SOFT_DEL_BY_NAME_COL = 156; // col156: displayName
+
 // Phone / ID columns (1-based sheet col index) — force text storage
 const PHONE_COLS_1BASED = [7, 9, 27, 50, 107, 109, 111, 117, 132];
 
@@ -81,8 +87,17 @@ function doPost(e) {
       else result = updateData(parseInt(data.sheetRow), data, token);
     }
     else if (action === 'delete') {
+      // Routes to soft-delete; hard-delete is disabled from web API
       if (!hasPermission(token, 'delete_record')) result = { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูล' };
-      else result = deleteData(parseInt(data.sheetRow), token);
+      else result = softDeleteData(parseInt(data.sheetRow), token);
+    }
+    else if (action === 'listTrash') {
+      if (!hasPermission(token, 'delete_record')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = listTrashRecords(token);
+    }
+    else if (action === 'restoreRecord') {
+      if (!hasPermission(token, 'delete_record')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = restoreRecord(data, token);
     }
     else if (action === 'uploadAttachment') {
       if (!hasPermission(token, 'upload_attachment')) result = { success: false, message: 'ต้องเข้าสู่ระบบก่อนอัปโหลดรูป' };
@@ -120,6 +135,10 @@ function doPost(e) {
     else if (action === 'initNewFormColumns') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initNewFormColumns();
+    }
+    else if (action === 'initSoftDeleteColumns') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = initSoftDeleteColumns();
     }
     else if (action === 'initRecordIdCounter') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
@@ -631,9 +650,11 @@ function getDashboardDataInternal() {
   var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
   var raw   = sheet.getDataRange().getDisplayValues();
   if (raw.length <= 1) return { total: 0, allData: [], attachmentCounts: {} };
-  var rows = raw.slice(1).map(function(rowData, i) {
-    return { sheetRow: i + 2, seqNo: i + 1, data: rowData };
-  }).reverse();
+  var rows = raw.slice(1)
+    .map(function(rowData, i) { return { sheetRow: i + 2, seqNo: 0, data: rowData }; })
+    .filter(function(item) { return item.data[152] !== 'deleted'; })
+    .map(function(item, j) { item.seqNo = j + 1; return item; })
+    .reverse();
   return {
     total:            rows.length,
     allData:          rows,
@@ -826,6 +847,96 @@ function cascadeDeleteAttachments(recordId) {
       attSheet.getRange(i + 2, 12).setValue(now);
       try { DriveApp.getFileById(vals[i][3]).setTrashed(true); } catch(e) {}
     }
+  }
+}
+
+// ===== SOFT DELETE / TRASH =====
+
+function initSoftDeleteColumns() {
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var headers = ['DeletedStatus','DeletedAt','DeletedByUserId','DeletedByDisplayName'];
+  var lastCol = sheet.getLastColumn();
+  for (var i = 0; i < headers.length; i++) {
+    var col = SOFT_DEL_STATUS_COL + i;
+    if (lastCol < col) sheet.getRange(1, col).setValue(headers[i]);
+  }
+  return { success: true, message: 'Soft-delete columns initialized (cols 153–156)' };
+}
+
+function softDeleteData(sheetRowNum, token) {
+  if (!hasPermission(token, 'delete_record')) return { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูล!' };
+  try {
+    var sess  = getSession(token);
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    var recId = String(sheet.getRange(sheetRowNum, 1).getValue());
+    var now   = new Date().toISOString();
+    sheet.getRange(sheetRowNum, SOFT_DEL_STATUS_COL).setValue('deleted');
+    sheet.getRange(sheetRowNum, SOFT_DEL_AT_COL).setValue(now);
+    sheet.getRange(sheetRowNum, SOFT_DEL_BY_ID_COL).setValue(sess ? sess.userId : '');
+    sheet.getRange(sheetRowNum, SOFT_DEL_BY_NAME_COL).setValue(sess ? sess.displayName : '');
+    cascadeSoftDeleteAttachments(recId);
+    try { CacheService.getScriptCache().remove('editlock_' + recId); } catch(ex) {}
+    writeAuditLog({ action: 'SOFT_DELETE_RECORD', token: token, recordId: recId, status: 'SUCCESS' });
+    return { success: true, message: 'ย้ายข้อมูลไปถังขยะสำเร็จ!' };
+  } catch(e) {
+    return { success: false, message: 'เกิดข้อผิดพลาด: ' + e.toString() };
+  }
+}
+
+function cascadeSoftDeleteAttachments(recordId) {
+  var attSheet = getOrCreateAttachmentsSheet();
+  if (attSheet.getLastRow() <= 1) return;
+  var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues();
+  var now  = new Date().toISOString();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][1]) === String(recordId) && vals[i][8] !== 'deleted') {
+      attSheet.getRange(i + 2, 9).setValue('deleted');
+      attSheet.getRange(i + 2, 11).setValue(now);
+      attSheet.getRange(i + 2, 12).setValue(now);
+      // DriveApp.setTrashed() intentionally omitted — files preserved for restore
+    }
+  }
+}
+
+function listTrashRecords(token) {
+  if (!hasPermission(token, 'delete_record')) return { success: false, message: 'ไม่มีสิทธิ์' };
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var raw   = sheet.getDataRange().getDisplayValues();
+  if (raw.length <= 1) return { success: true, records: [] };
+  var records = [];
+  for (var i = 1; i < raw.length; i++) {
+    var rowData = raw[i];
+    if (rowData[152] === 'deleted') {
+      records.push({
+        sheetRow:      i + 1,
+        recordId:      rowData[0],
+        name:          ((rowData[3] || '') + ' ' + (rowData[4] || '')).trim(),
+        deletedAt:     rowData[153] || '',
+        deletedByName: rowData[155] || ''
+      });
+    }
+  }
+  records.reverse(); // newest first
+  return { success: true, records: records };
+}
+
+function restoreRecord(data, token) {
+  if (!hasPermission(token, 'delete_record')) return { success: false, message: 'ไม่มีสิทธิ์' };
+  var sheetRowNum = parseInt(data.sheetRow);
+  if (!sheetRowNum) return { success: false, message: 'ต้องระบุ sheetRow' };
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    var currentStatus = String(sheet.getRange(sheetRowNum, SOFT_DEL_STATUS_COL).getValue());
+    if (currentStatus !== 'deleted') return { success: false, message: 'รายการนี้ไม่ได้อยู่ในถังขยะ' };
+    var recId = String(sheet.getRange(sheetRowNum, 1).getValue());
+    sheet.getRange(sheetRowNum, SOFT_DEL_STATUS_COL).setValue('');
+    sheet.getRange(sheetRowNum, SOFT_DEL_AT_COL).setValue('');
+    sheet.getRange(sheetRowNum, SOFT_DEL_BY_ID_COL).setValue('');
+    sheet.getRange(sheetRowNum, SOFT_DEL_BY_NAME_COL).setValue('');
+    writeAuditLog({ action: 'RESTORE_RECORD', token: token, recordId: recId, status: 'SUCCESS' });
+    return { success: true, message: 'กู้คืนรายการสำเร็จ!' };
+  } catch(e) {
+    return { success: false, message: 'เกิดข้อผิดพลาด: ' + e.toString() };
   }
 }
 

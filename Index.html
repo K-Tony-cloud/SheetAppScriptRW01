@@ -181,6 +181,9 @@
         <button class="btn btn-outline-success btn-sm d-none" id="btnPersonList" onclick="openPersonList()">
           <i class="fas fa-user-clock"></i> ผู้มาซ้ำ
         </button>
+        <button class="btn btn-outline-secondary btn-sm d-none" id="btnTrash" onclick="openTrashModal()">
+          <i class="fas fa-trash-restore"></i> ถังขยะ
+        </button>
         <div class="dropdown d-none" id="exportDropdownWrapper">
           <button class="btn btn-outline-warning btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
             <i class="fas fa-download"></i> ส่งออก
@@ -1320,7 +1323,7 @@
           <i class="fas fa-trash-alt text-danger mb-3" style="font-size: 3rem;"></i>
           <p class="fs-5">คุณต้องการลบข้อมูลของ</p>
           <p class="fw-bold fs-4 text-danger" id="deleteConfirmName"></p>
-          <p class="text-muted">การลบข้อมูลนี้ไม่สามารถกู้คืนได้</p>
+          <p class="text-muted">รายการจะถูกย้ายไปถังขยะ สามารถกู้คืนได้ภายหลัง</p>
         </div>
         <div class="modal-footer justify-content-center gap-2">
           <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">
@@ -1348,6 +1351,24 @@
             <button class="btn btn-sm btn-outline-secondary mb-2" onclick="backToPersonList()"><i class="fas fa-arrow-left me-1"></i>กลับรายการ</button>
             <div id="personDetailContent"></div>
           </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><i class="fas fa-times"></i> ปิด</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trash Modal -->
+  <div class="modal fade" id="trashModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header bg-secondary text-white">
+          <h5 class="modal-title"><i class="fas fa-trash-restore"></i> ถังขยะ — รายการที่ถูกลบ</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-2">
+          <div id="trashContent"><div class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</div></div>
         </div>
         <div class="modal-footer py-2">
           <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><i class="fas fa-times"></i> ปิด</button>
@@ -1448,6 +1469,7 @@
     var changePasswordModal   = null;
     var editNameModal         = null;
     var personListModal       = null;
+    var trashModal            = null;
 
     const CLIENT_PERMISSIONS = {
       viewer:      ['view_dashboard', 'view_records'],
@@ -1499,6 +1521,7 @@
       changePasswordModal = new bootstrap.Modal(document.getElementById('changePasswordModal'));
       editNameModal       = new bootstrap.Modal(document.getElementById('editNameModal'));
       personListModal     = new bootstrap.Modal(document.getElementById('personListModal'));
+      trashModal          = new bootstrap.Modal(document.getElementById('trashModal'));
 
       // Restore session from sessionStorage
       try {
@@ -1607,6 +1630,7 @@
       const btnCP   = document.getElementById('btnChangePassword');
       const btnEN   = document.getElementById('btnEditName');
       const btnPL   = document.getElementById('btnPersonList');
+      const btnTR   = document.getElementById('btnTrash');
       if (!currentUser) {
         navDisp.classList.add('d-none');
         if (btnUM) btnUM.classList.add('d-none');
@@ -1614,6 +1638,7 @@
         if (btnCP) btnCP.classList.add('d-none');
         if (btnEN) btnEN.classList.add('d-none');
         if (btnPL) btnPL.classList.add('d-none');
+        if (btnTR) btnTR.classList.add('d-none');
         return;
       }
       navDisp.classList.remove('d-none');
@@ -1631,6 +1656,10 @@
       if (btnCP) btnCP.classList.remove('d-none');
       if (btnEN) btnEN.classList.remove('d-none');
       if (btnPL && hasClientPerm('view_records')) btnPL.classList.remove('d-none');
+      if (btnTR) {
+        if (hasClientPerm('delete_record')) btnTR.classList.remove('d-none');
+        else btnTR.classList.add('d-none');
+      }
     }
 
     function applyRoleUI() {
@@ -3456,6 +3485,67 @@
           filteredData.shift();
         }
       }, 350);
+    }
+
+    // ==================== TRASH ====================
+    function openTrashModal() {
+      if (!hasClientPerm('delete_record')) { showToast('ไม่มีสิทธิ์', 'danger'); return; }
+      document.getElementById('trashContent').innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</div>';
+      trashModal.show();
+      gasPost({ action: 'listTrash', token: adminSession })
+        .then(function(r) {
+          if (!r.success) {
+            document.getElementById('trashContent').innerHTML = '<div class="text-center text-danger py-4">' + escHtml(r.message) + '</div>';
+            return;
+          }
+          renderTrashList(r.records || []);
+        })
+        .catch(function() {
+          document.getElementById('trashContent').innerHTML = '<div class="text-center text-danger py-4">เกิดข้อผิดพลาดในการเชื่อมต่อ</div>';
+        });
+    }
+
+    function renderTrashList(records) {
+      if (!records.length) {
+        document.getElementById('trashContent').innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-trash fa-3x mb-3 d-block"></i>ถังขยะว่างเปล่า</div>';
+        return;
+      }
+      var html = '<div class="table-responsive"><table class="table table-sm table-hover table-bordered mb-0"><thead class="table-dark"><tr>'
+        + '<th>#</th><th>RecordID</th><th>ชื่อ-สกุล</th><th>ลบเมื่อ</th><th>ลบโดย</th><th></th>'
+        + '</tr></thead><tbody>';
+      records.forEach(function(rec, idx) {
+        var deletedAtDisplay = rec.deletedAt ? rec.deletedAt.replace('T', ' ').substring(0, 16) : '-';
+        html += '<tr>'
+          + '<td class="text-muted small">' + (idx + 1) + '</td>'
+          + '<td class="small">' + escHtml(String(rec.recordId)) + '</td>'
+          + '<td>' + escHtml(rec.name || '-') + '</td>'
+          + '<td class="small text-muted">' + escHtml(deletedAtDisplay) + '</td>'
+          + '<td class="small">' + escHtml(rec.deletedByName || '-') + '</td>'
+          + '<td><button class="btn btn-sm btn-success" '
+          + 'data-sheetrow="' + rec.sheetRow + '" '
+          + 'data-recid="' + escHtml(String(rec.recordId)) + '" '
+          + 'data-name="' + escHtml(rec.name || '') + '" '
+          + 'onclick="executeRestore(parseInt(this.dataset.sheetrow), this.dataset.recid, this.dataset.name)">'
+          + '<i class="fas fa-trash-restore me-1"></i>กู้คืน</button></td>'
+          + '</tr>';
+      });
+      html += '</tbody></table></div>';
+      document.getElementById('trashContent').innerHTML = html;
+    }
+
+    function executeRestore(sheetRow, recId, name) {
+      if (!confirm('กู้คืนรายการ: ' + name + ' (ID: ' + recId + ')?')) return;
+      gasPost({ action: 'restoreRecord', sheetRow: sheetRow, token: adminSession })
+        .then(function(r) {
+          if (r.success) {
+            showToast(r.message, 'success');
+            openTrashModal();
+            refreshDashboard();
+          } else {
+            showToast(r.message || 'กู้คืนไม่สำเร็จ', 'danger');
+          }
+        })
+        .catch(function() { showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'danger'); });
     }
 
     function umLoadUsers() {
