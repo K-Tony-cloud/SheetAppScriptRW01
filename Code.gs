@@ -140,6 +140,14 @@ function doPost(e) {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initSoftDeleteColumns();
     }
+    else if (action === 'previewNormalize') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = previewNormalizeEventDates();
+    }
+    else if (action === 'migrateEventDates') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = migrateEventDatesToBuddhistDMY();
+    }
     else if (action === 'initRecordIdCounter') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initRecordIdCounter();
@@ -985,7 +993,7 @@ function buildDataRow(recordId, f, existingVals) {
 
   return [
     recordId,
-    col('col2'),  col('col3'),  col('col4'),  col('col5'),
+    normalizeEventDateForStorage(col('col2')),  col('col3'),  col('col4'),  col('col5'),
     col('col6'),  col('col7'),  col('col8'),  col('col9'),
     col('col10'), col('col11'), col('col12'), col('col13'),
     col('col14'), col('col15'), col('col16'), col('col17'),
@@ -2017,4 +2025,248 @@ function cleanupUnderscoreTestAuditRows() {
   }
   Logger.log('=== DONE: Deleted ' + toDelete.length + ' _test rows ===');
   SpreadsheetApp.flush();
+}
+
+// ===== DATE NORMALIZATION =====
+
+/**
+ * Converts any legacy date format in col2 to DD/MM/BBBB (Buddhist Era, zero-padded).
+ * Idempotent: DD/MM/BBBB in → DD/MM/BBBB out (no double +543).
+ * Returns '' for blank or unparseable input.
+ */
+function normalizeEventDateForStorage(rawDate) {
+  var THAI_MONTHS = {
+    'มกราคม':1,'กุมภาพันธ์':2,'มีนาคม':3,'เมษายน':4,'พฤษภาคม':5,'มิถุนายน':6,
+    'กรกฎาคม':7,'สิงหาคม':8,'กันยายน':9,'ตุลาคม':10,'พฤศจิกายน':11,'ธันวาคม':12,
+    'ม.ค.':1,'ก.พ.':2,'มี.ค.':3,'เม.ย.':4,'พ.ค.':5,'มิ.ย.':6,
+    'ก.ค.':7,'ส.ค.':8,'ก.ย.':9,'ต.ค.':10,'พ.ย.':11,'ธ.ค.':12
+  };
+  var THAI_MONTH_KEYS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+    'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม',
+    'ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+  if (rawDate === null || rawDate === undefined || rawDate === '') return '';
+
+  // Date object (primary path for getValues() results from Sheets date-formatted cells)
+  if (Object.prototype.toString.call(rawDate) === '[object Date]' && !isNaN(rawDate.getTime())) {
+    // Utilities.formatDate reads cell in explicit timezone — avoids UTC midnight drift
+    var bkk = Utilities.formatDate(rawDate, 'Asia/Bangkok', 'dd/MM/yyyy'); // e.g. "24/03/2026" (CE)
+    var pts  = bkk.split('/');
+    var dD = parseInt(pts[0]), dM = parseInt(pts[1]), dY = parseInt(pts[2]);
+    return pad(dD) + '/' + pad(dM) + '/' + (dY + 543); // CE → BE
+  }
+
+  // String fallback — handles all legacy textual formats
+  var s = String(rawDate).trim();
+  if (!s) return '';
+
+  // Format 1: ISO YYYY-MM-DD[Trest]
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    var y = parseInt(m[1]), mo = parseInt(m[2]), d = parseInt(m[3]);
+    if (y < 2400) y = y + 543; // CE → BE
+    return pad(d) + '/' + pad(mo) + '/' + y;
+  }
+
+  // Format 2: DD/MM/YYYY or DD/MM/BBBB — idempotent: y>=2400 already BE
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    var d2 = parseInt(m[1]), mo2 = parseInt(m[2]), y2 = parseInt(m[3]);
+    if (y2 < 2400) y2 = y2 + 543;
+    return pad(d2) + '/' + pad(mo2) + '/' + y2;
+  }
+
+  // Format 3: DD-MM-YYYY hyphen, day-first
+  m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (m) {
+    var d3 = parseInt(m[1]), mo3 = parseInt(m[2]), y3 = parseInt(m[3]);
+    if (y3 < 2400) y3 = y3 + 543;
+    return pad(d3) + '/' + pad(mo3) + '/' + y3;
+  }
+
+  // Format 4: Thai textual "3 เม.ย.2026" / "3 เม.ย.2569" / "24 มี.ค.26"
+  for (var ki = 0; ki < THAI_MONTH_KEYS.length; ki++) {
+    var mname = THAI_MONTH_KEYS[ki];
+    var idx = s.indexOf(mname);
+    if (idx === -1) continue;
+    var before = s.substring(0, idx).trim();
+    var after  = s.substring(idx + mname.length).trim();
+    var d4 = parseInt(before);
+    var y4 = parseInt(after);
+    if (isNaN(d4) || isNaN(y4) || before.replace(/\d/g, '').length > 0) continue;
+    if (y4 < 100) y4 = 2000 + y4 + 543;  // 2-digit CE → BE (26 → 2569)
+    else if (y4 < 2400) y4 = y4 + 543;   // 4-digit CE → BE
+    // else >= 2400: already BE
+    return pad(d4) + '/' + pad(THAI_MONTHS[mname]) + '/' + y4;
+  }
+
+  return ''; // unparseable
+}
+
+/**
+ * Read-only dry-run. Pass condition: parseable === total, unparseable === 0.
+ * Reports inputType and parseSource distributions.
+ */
+function previewNormalizeEventDates() {
+  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_NAME);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: true, total: 0, parseable: 0, unparseable: 0, changed: 0, alreadyNormalized: 0,
+    inputTypeCounts: {}, parseSourceCounts: {}, samples: [] };
+
+  var numRows     = lastRow - 1;
+  var rawVals     = sheet.getRange(2, 1, numRows, 2).getValues();       // [recordId, col2_raw]
+  var displayVals = sheet.getRange(2, 2, numRows, 1).getDisplayValues(); // col2 display string only
+
+  var THAI_MONTH_KEYS_ALL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+    'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม',
+    'ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+  function detectSource(cellVal) {
+    if (cellVal === null || cellVal === undefined || cellVal === '') return 'BLANK';
+    if (Object.prototype.toString.call(cellVal) === '[object Date]' && !isNaN(cellVal.getTime())) return 'DATE_OBJECT';
+    var s = String(cellVal).trim();
+    if (!s) return 'BLANK';
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return 'ISO';
+    var slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (slash) return parseInt(slash[3]) >= 2400 ? 'DD_MM_BBBB' : 'DD_MM_YYYY';
+    if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(s)) return 'DD_MM_HYPHEN';
+    for (var ki = 0; ki < THAI_MONTH_KEYS_ALL.length; ki++) {
+      var mn = THAI_MONTH_KEYS_ALL[ki];
+      var ix = s.indexOf(mn);
+      if (ix !== -1) {
+        var yr = parseInt(s.substring(ix + mn.length).trim());
+        return (!isNaN(yr) && yr < 100) ? 'THAI_SHORT_YEAR' : 'THAI_TEXT';
+      }
+    }
+    return 'UNKNOWN';
+  }
+
+  function incr(obj, key) { obj[key] = (obj[key] || 0) + 1; }
+
+  var total = 0, parseable = 0, unparseable = 0, changed = 0, alreadyNormal = 0;
+  var inputTypeCounts  = { dateObject: 0, string: 0, blank: 0, other: 0 };
+  var parseSourceCounts = {};
+  var samples = [];
+
+  for (var i = 0; i < numRows; i++) {
+    total++;
+    var cellVal  = rawVals[i][1];
+    var recId    = rawVals[i][0];
+    var dispVal  = displayVals[i][0]; // display string for diagnostic only
+
+    // inputType
+    var isDate = Object.prototype.toString.call(cellVal) === '[object Date]' && !isNaN(cellVal.getTime());
+    var isEmpty = (cellVal === null || cellVal === undefined || cellVal === '' ||
+                  (!isDate && String(cellVal).trim() === ''));
+    var inputType;
+    if (isEmpty)       { inputType = 'blank';      inputTypeCounts.blank++; }
+    else if (isDate)   { inputType = 'dateObject';  inputTypeCounts.dateObject++; }
+    else if (typeof cellVal === 'string' || typeof cellVal === 'number') {
+                         inputType = 'string';      inputTypeCounts.string++; }
+    else               { inputType = 'other';       inputTypeCounts.other++; }
+
+    var parseSource = detectSource(cellVal);
+    incr(parseSourceCounts, parseSource);
+
+    if (isEmpty) { alreadyNormal++; parseable++; continue; }
+
+    var norm = normalizeEventDateForStorage(cellVal); // pass raw value, not stringified
+    if (!norm) {
+      unparseable++;
+      if (samples.length < 20) samples.push({
+        sheetRow: i+2, recordId: String(recId), inputType: inputType,
+        parseSource: parseSource, displayValue: dispVal,
+        normalized: null, status: 'UNPARSEABLE'
+      });
+    } else {
+      parseable++;
+      // "already normalized" = display value already equals normalized target
+      var alreadyOk = (dispVal === norm);
+      if (alreadyOk) {
+        alreadyNormal++;
+      } else {
+        changed++;
+        if (samples.length < 20) samples.push({
+          sheetRow: i+2, recordId: String(recId), inputType: inputType,
+          parseSource: parseSource, displayValue: dispVal,
+          normalized: norm, status: 'WILL_CHANGE'
+        });
+      }
+    }
+  }
+
+  return {
+    success: true, total: total, parseable: parseable, unparseable: unparseable,
+    changed: changed, alreadyNormalized: alreadyNormal,
+    inputTypeCounts: inputTypeCounts, parseSourceCounts: parseSourceCounts,
+    samples: samples
+  };
+}
+
+/**
+ * Actual migration. Run ONLY after previewNormalizeEventDates() confirms parseable === total.
+ * Writes only col2 (column B). Does NOT touch UpdatedAt, CreatedAt, or any other column.
+ * Creates backup sheet with original display values before writing.
+ */
+function migrateEventDatesToBuddhistDMY() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return { success: false, message: 'ไม่สามารถล็อกได้ กรุณาลองใหม่ภายหลัง' };
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAME);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: true, message: 'ไม่มีข้อมูล', total: 0, changed: 0 };
+
+    var numRows = lastRow - 1;
+    // Re-read inside lock: col A (recordId) + col B (col2 raw)
+    var raw2col  = sheet.getRange(2, 1, numRows, 2).getValues();
+    // Display values for backup (human-readable original)
+    var dispCol  = sheet.getRange(2, 2, numRows, 1).getDisplayValues();
+
+    // Phase 1: validate all — abort on any unparseable
+    var unparseableRows = [];
+    var newDates = [];
+    for (var i = 0; i < numRows; i++) {
+      var cellVal = raw2col[i][1];
+      var isEmpty = (cellVal === null || cellVal === undefined || cellVal === '' ||
+                    (Object.prototype.toString.call(cellVal) !== '[object Date]' && String(cellVal).trim() === ''));
+      if (isEmpty) { newDates.push(['']); continue; }
+      var norm = normalizeEventDateForStorage(cellVal); // pass raw, not stringified
+      if (!norm) unparseableRows.push({ sheetRow: i+2, recordId: String(raw2col[i][0]), displayValue: dispCol[i][0] });
+      newDates.push([norm || String(cellVal)]);
+    }
+    if (unparseableRows.length > 0) {
+      return { success: false, message: 'พบ ' + unparseableRows.length + ' รายการ parse ไม่ได้ — กรุณาแก้ไขก่อน migration', unparseable: unparseableRows };
+    }
+
+    // Phase 2: backup — stores original display value + normalized target
+    var today      = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyyMMdd');
+    var backupName = 'DateMigrationBackup_' + today;
+    var oldBackup  = ss.getSheetByName(backupName);
+    if (oldBackup) ss.deleteSheet(oldBackup);
+    var backup     = ss.insertSheet(backupName);
+    var backupData = [['SheetRow','RecordId','OriginalDisplayValue','NormalizedDate']];
+    for (var j = 0; j < numRows; j++) {
+      backupData.push([j+2, String(raw2col[j][0]||''), dispCol[j][0], newDates[j][0]]);
+    }
+    backup.getRange(1, 1, backupData.length, 4).setValues(backupData);
+
+    // Phase 3: write col B only — no other columns touched (UpdatedAt unchanged)
+    sheet.getRange(2, 2, numRows, 1).setValues(newDates);
+    SpreadsheetApp.flush();
+
+    var changed = 0;
+    for (var k = 0; k < numRows; k++) {
+      if (dispCol[k][0] !== newDates[k][0]) changed++;
+    }
+
+    writeAuditLog({ action: 'MAINTENANCE_DATE_NORMALIZATION', metadata: { total: numRows, changed: changed, backupSheet: backupName } });
+
+    return { success: true, total: numRows, changed: changed, backupSheet: backupName };
+  } finally {
+    lock.releaseLock();
+  }
 }
