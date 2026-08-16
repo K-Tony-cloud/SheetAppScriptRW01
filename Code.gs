@@ -1673,3 +1673,29 @@ function getTambons(amphureId) {
     return data;
   } catch(e) { throw new Error('getTambons failed: ' + e.message); }
 }
+
+// ONE-TIME MAINTENANCE — run from GAS Editor only, not callable via web API
+function cleanupTestAuditRows() {
+  var TEST_USERNAMES = ['__test_verify__', '_diag_verify_49', 'test_nonexistent_verify'];
+  var auditSheet = getOrCreateAuditLogSheet();
+  var lastRow = auditSheet.getLastRow();
+  if (lastRow <= 1) { Logger.log('AuditLog is empty.'); return; }
+  var vals = auditSheet.getRange(2, 1, lastRow - 1, 15).getValues();
+  var toDelete = [];
+  for (var i = 0; i < vals.length; i++) {
+    var username = String(vals[i][3] || '');
+    if (TEST_USERNAMES.indexOf(username) !== -1) {
+      toDelete.push({ row: i + 2, auditId: String(vals[i][0]), ts: String(vals[i][1]), username: username, action: String(vals[i][6]) });
+    }
+  }
+  if (toDelete.length === 0) { Logger.log('No test entries found. Nothing deleted.'); return; }
+  Logger.log('=== PREVIEW: TEST AUDIT ROWS TO DELETE (' + toDelete.length + ') ===');
+  toDelete.forEach(function(e) {
+    Logger.log('  AuditID=' + e.auditId + '  ts=' + e.ts + '  user=' + e.username + '  action=' + e.action + '  sheetRow=' + e.row);
+  });
+  for (var j = toDelete.length - 1; j >= 0; j--) {
+    auditSheet.deleteRow(toDelete[j].row);
+  }
+  Logger.log('=== DONE: Deleted ' + toDelete.length + ' test rows ===');
+  SpreadsheetApp.flush();
+}
