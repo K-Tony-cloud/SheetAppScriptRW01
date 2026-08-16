@@ -178,6 +178,9 @@
         <button class="btn btn-outline-info btn-sm d-none" id="btnAuditLog" onclick="openAuditLog()">
           <i class="fas fa-history"></i> ประวัติ
         </button>
+        <button class="btn btn-outline-success btn-sm d-none" id="btnPersonList" onclick="openPersonList()">
+          <i class="fas fa-user-clock"></i> ผู้มาซ้ำ
+        </button>
         <div class="dropdown d-none" id="exportDropdownWrapper">
           <button class="btn btn-outline-warning btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
             <i class="fas fa-download"></i> ส่งออก
@@ -1331,6 +1334,28 @@
     </div>
   </div>
 
+  <!-- Person List Modal -->
+  <div class="modal fade" id="personListModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title" id="personListModalTitle"><i class="fas fa-user-clock"></i> ประวัติผู้มาซ้ำ</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-2">
+          <div id="personListView"><div id="personListContent"><div class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin"></i></div></div></div>
+          <div id="personDetailView" class="d-none">
+            <button class="btn btn-sm btn-outline-secondary mb-2" onclick="backToPersonList()"><i class="fas fa-arrow-left me-1"></i>กลับรายการ</button>
+            <div id="personDetailContent"></div>
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><i class="fas fa-times"></i> ปิด</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Edit Display Name Modal -->
   <div class="modal fade" id="editNameModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-sm">
@@ -1420,6 +1445,7 @@
     var auditLogModal         = null;
     var changePasswordModal   = null;
     var editNameModal         = null;
+    var personListModal       = null;
 
     const CLIENT_PERMISSIONS = {
       viewer:      ['view_dashboard', 'view_records'],
@@ -1470,6 +1496,7 @@
       auditLogModal      = new bootstrap.Modal(document.getElementById('auditLogModal'));
       changePasswordModal = new bootstrap.Modal(document.getElementById('changePasswordModal'));
       editNameModal       = new bootstrap.Modal(document.getElementById('editNameModal'));
+      personListModal     = new bootstrap.Modal(document.getElementById('personListModal'));
 
       // Restore session from sessionStorage
       try {
@@ -1577,12 +1604,14 @@
       const btnAL   = document.getElementById('btnAuditLog');
       const btnCP   = document.getElementById('btnChangePassword');
       const btnEN   = document.getElementById('btnEditName');
+      const btnPL   = document.getElementById('btnPersonList');
       if (!currentUser) {
         navDisp.classList.add('d-none');
         if (btnUM) btnUM.classList.add('d-none');
         if (btnAL) btnAL.classList.add('d-none');
         if (btnCP) btnCP.classList.add('d-none');
         if (btnEN) btnEN.classList.add('d-none');
+        if (btnPL) btnPL.classList.add('d-none');
         return;
       }
       navDisp.classList.remove('d-none');
@@ -1599,6 +1628,7 @@
       }
       if (btnCP) btnCP.classList.remove('d-none');
       if (btnEN) btnEN.classList.remove('d-none');
+      if (btnPL && hasClientPerm('view_records')) btnPL.classList.remove('d-none');
     }
 
     function applyRoleUI() {
@@ -3262,6 +3292,126 @@
           btn.innerHTML = '<i class="fas fa-save"></i> บันทึก';
           showEnErr('เกิดข้อผิดพลาดในการเชื่อมต่อ');
         });
+    }
+
+    // ==================== PERSON-CENTRIC ====================
+
+    function normalizeIdCard(id) {
+      return (id || '').replace(/[^0-9]/g, '');
+    }
+
+    function maskIdCard(normId) {
+      if (!normId || normId.length !== 13) return normId ? normId.substring(0,4) + '-XXXXX-XXXX' : '-';
+      return normId[0] + '-' + normId.substring(1,5) + '-XXXXX-' + normId.substring(10,12) + '-' + normId[12];
+    }
+
+    function openPersonList() {
+      document.getElementById('personListView').classList.remove('d-none');
+      document.getElementById('personDetailView').classList.add('d-none');
+      document.getElementById('personListModalTitle').innerHTML = '<i class="fas fa-user-clock"></i> ประวัติผู้มาซ้ำ';
+      renderPersonList();
+      personListModal.show();
+    }
+
+    function renderPersonList() {
+      var personMap = {};
+      (globalData || []).forEach(function(item) {
+        var normId = normalizeIdCard(item.data[6]);
+        if (!normId) return;
+        if (!personMap[normId]) personMap[normId] = { normId: normId, records: [] };
+        personMap[normId].records.push(item);
+      });
+      var repeats = Object.keys(personMap)
+        .map(function(k) { return personMap[k]; })
+        .filter(function(p) { return p.records.length >= 2; });
+      repeats.sort(function(a, b) {
+        if (b.records.length !== a.records.length) return b.records.length - a.records.length;
+        var latestA = a.records.reduce(function(m,r){ return r.data[1]>m?r.data[1]:m; }, '');
+        var latestB = b.records.reduce(function(m,r){ return r.data[1]>m?r.data[1]:m; }, '');
+        return latestB.localeCompare(latestA);
+      });
+      var el = document.getElementById('personListContent');
+      if (!repeats.length) {
+        el.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-users fa-2x mb-2 d-block"></i>ไม่พบบุคคลที่มามากกว่า 1 ครั้ง</div>';
+        return;
+      }
+      var rows = repeats.map(function(p, idx) {
+        var sorted = p.records.slice().sort(function(a,b){ return b.data[1].localeCompare(a.data[1]) || b.data[2].localeCompare(a.data[2]); });
+        var latest = sorted[0], first = sorted[sorted.length-1];
+        var name = ((latest.data[3]||'') + ' ' + (latest.data[4]||'')).trim();
+        return '<tr>' +
+          '<td class="text-center small text-muted">' + (idx+1) + '</td>' +
+          '<td>' + escHtml(name||'-') + '</td>' +
+          '<td class="small font-monospace text-muted">' + maskIdCard(p.normId) + '</td>' +
+          '<td class="text-center"><span class="badge bg-danger">' + p.records.length + '</span></td>' +
+          '<td class="small">' + escHtml(first.data[1]||'-') + '</td>' +
+          '<td class="small">' + escHtml(latest.data[1]||'-') + '</td>' +
+          '<td><button class="btn btn-sm btn-outline-primary py-0" onclick="viewPersonDetail(' + JSON.stringify(p.normId) + ')"><i class="fas fa-history"></i> ดูประวัติ</button></td>' +
+          '</tr>';
+      }).join('');
+      el.innerHTML = '<p class="small text-muted mb-2">พบ <strong>' + repeats.length + '</strong> บุคคลที่มามากกว่า 1 ครั้ง</p>' +
+        '<div class="table-responsive"><table class="table table-sm table-hover align-middle">' +
+        '<thead class="table-light"><tr><th>#</th><th>ชื่อ-นามสกุล</th><th>เลขบัตร</th><th class="text-center">ครั้ง</th><th>ครั้งแรก</th><th>ล่าสุด</th><th></th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table></div>';
+    }
+
+    function viewPersonDetail(normId) {
+      var records = (globalData||[]).filter(function(item){ return normalizeIdCard(item.data[6]) === normId; });
+      if (!records.length) return;
+      var sorted = records.slice().sort(function(a,b){ return b.data[1].localeCompare(a.data[1]) || b.data[2].localeCompare(a.data[2]); });
+      var latest = sorted[0], first = sorted[sorted.length-1];
+      var name = ((latest.data[3]||'') + ' ' + (latest.data[4]||'')).trim();
+      var timelineRows = sorted.map(function(item, i) {
+        var d = item.data;
+        var warrant = d[41]==='มีหมายเสด็จ' ? '<span class="badge bg-warning text-dark small">มีหมาย</span>' : '<span class="badge bg-light text-muted border small">ไม่มีหมาย</span>';
+        var caseType = (d[112]||'').toString().replace(/^'/, '') || '-';
+        return '<tr>' +
+          '<td class="text-center small text-muted">' + (i+1) + '</td>' +
+          '<td class="small">' + escHtml(d[1]||'-') + '<br><span class="text-muted">' + escHtml(d[2]||'') + '</span></td>' +
+          '<td class="small">' + escHtml(caseType) + '</td>' +
+          '<td class="small">' + warrant + '</td>' +
+          '<td class="small">' + escHtml(d[43]||'-') + '</td>' +
+          '<td class="small">' + escHtml(((d[47]||'') + ' ' + (d[48]||'')).trim()||'-') + '</td>' +
+          '<td><button class="btn btn-sm btn-outline-secondary py-0" onclick="viewPersonRecord(' + item.sheetRow + ')"><i class="fas fa-eye"></i></button></td>' +
+          '</tr>';
+      }).join('');
+      document.getElementById('personDetailContent').innerHTML =
+        '<div class="card border-success mb-3"><div class="card-body py-2">' +
+        '<div class="fw-bold">' + escHtml(name||'-') + '</div>' +
+        '<div class="small font-monospace text-muted">' + maskIdCard(normId) + '</div>' +
+        '<div class="mt-1">' +
+        '<span class="badge bg-danger me-2">' + records.length + ' ครั้ง</span>' +
+        '<span class="small text-muted">ครั้งแรก: ' + escHtml(first.data[1]||'-') + '</span>' +
+        '<span class="small text-muted ms-2">ล่าสุด: ' + escHtml(latest.data[1]||'-') + '</span>' +
+        '</div></div></div>' +
+        '<div class="table-responsive"><table class="table table-sm table-hover align-middle">' +
+        '<thead class="table-light"><tr><th>#</th><th>วันที่/เวลา</th><th>ประเภทคดี</th><th>หมายฯ</th><th>สถานที่</th><th>เจ้าหน้าที่</th><th></th></tr></thead>' +
+        '<tbody>' + timelineRows + '</tbody></table></div>';
+      document.getElementById('personListView').classList.add('d-none');
+      document.getElementById('personDetailView').classList.remove('d-none');
+      document.getElementById('personListModalTitle').innerHTML = '<i class="fas fa-user-clock"></i> ประวัติ: ' + escHtml(name||'-');
+    }
+
+    function backToPersonList() {
+      document.getElementById('personDetailView').classList.add('d-none');
+      document.getElementById('personListView').classList.remove('d-none');
+      document.getElementById('personListModalTitle').innerHTML = '<i class="fas fa-user-clock"></i> ประวัติผู้มาซ้ำ';
+    }
+
+    function viewPersonRecord(sheetRow) {
+      var item = (globalData||[]).find(function(r){ return r.sheetRow === sheetRow; });
+      if (!item) return;
+      personListModal.hide();
+      setTimeout(function() {
+        var idx = filteredData.findIndex(function(r){ return r.sheetRow === sheetRow; });
+        if (idx !== -1) {
+          viewDetails(idx);
+        } else {
+          filteredData.unshift(item);
+          viewDetails(0);
+          filteredData.shift();
+        }
+      }, 350);
     }
 
     function umLoadUsers() {
