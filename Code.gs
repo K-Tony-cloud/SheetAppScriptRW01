@@ -101,6 +101,7 @@ function doPost(e) {
     else if (action === 'createUser')          result = createUser(data, token);
     else if (action === 'updateUser')          result = updateUser(data, token);
     else if (action === 'resetUserPassword')   result = resetUserPassword(data, token);
+    else if (action === 'changeMyPassword')    result = changeMyPassword(data, token);
     else if (action === 'initUserSystem')      result = { success: false, message: 'Initialization endpoint disabled' };
     else if (action === 'initMetadataColumns') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
@@ -235,6 +236,7 @@ function loginUser(username, password) {
   var session = { userId: String(userRow[0]), role: String(userRow[5]), displayName: String(userRow[4]), username: String(userRow[1]) };
   CacheService.getScriptCache().put('sess_' + token, JSON.stringify(session), SESSION_TTL_SECS);
   try { CacheService.getScriptCache().remove('rolerev_' + session.userId); } catch(ex) {}
+  try { CacheService.getScriptCache().remove('pwdrev_' + session.userId); } catch(ex) {}
   writeAuditLog({ action: 'LOGIN_SUCCESS', token: token, userId: String(userRow[0]), username: String(userRow[1]), displayName: String(userRow[4]), role: String(userRow[5]), status: 'SUCCESS' });
 
   var now = new Date().toISOString();
@@ -297,6 +299,7 @@ function validateSession(token) {
     var _rv = CacheService.getScriptCache().get('rolerev_' + session.userId);
     if (_rv !== null && _rv !== session.role) return false;
   } catch(ex) {}
+  try { if (CacheService.getScriptCache().get('pwdrev_' + session.userId)) return false; } catch(ex) {}
   return true;
 }
 
@@ -308,6 +311,7 @@ function hasPermission(token, permission) {
     var _rv = CacheService.getScriptCache().get('rolerev_' + session.userId);
     if (_rv !== null && _rv !== session.role) return false;
   } catch(ex) {}
+  try { if (CacheService.getScriptCache().get('pwdrev_' + session.userId)) return false; } catch(ex) {}
   var perms = PERMISSIONS[session.role] || [];
   return perms.indexOf(permission) !== -1;
 }
@@ -410,6 +414,40 @@ function updateUser(data, token) {
     }
   }
   return { success: false, message: 'ไม่พบ userId: ' + data.userId };
+}
+
+function changeMyPassword(data, token) {
+  if (!validateSession(token)) return { success: false, message: 'Session หมดอายุ กรุณาเข้าสู่ระบบใหม่' };
+  var sess = getSession(token);
+  if (!sess) return { success: false, message: 'ไม่พบ session' };
+  if (!data.currentPassword || !data.newPassword) return { success: false, message: 'กรุณากรอกข้อมูลให้ครบ' };
+  if (data.newPassword.length < 8) return { success: false, message: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร' };
+  var sheet   = getOrCreateUsersSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { success: false, message: 'ไม่พบข้อมูลผู้ใช้' };
+  var vals = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]) === String(sess.userId)) {
+      if (!vals[i][6]) return { success: false, message: 'บัญชีถูกระงับ' };
+      var storedHash  = String(vals[i][2]);
+      var storedSalt  = String(vals[i][3]);
+      var currentHash = hashPassword(data.currentPassword, storedSalt);
+      if (currentHash !== storedHash) return { success: false, message: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' };
+      var newHashCheck = hashPassword(data.newPassword, storedSalt);
+      if (newHashCheck === storedHash) return { success: false, message: 'รหัสผ่านใหม่ต้องไม่เหมือนรหัสผ่านเดิม' };
+      var newSalt   = generateSalt();
+      var finalHash = hashPassword(data.newPassword, newSalt);
+      var rowNum    = i + 2;
+      sheet.getRange(rowNum, 3).setValue(finalHash);
+      sheet.getRange(rowNum, 4).setValue(newSalt);
+      sheet.getRange(rowNum, 10).setValue(new Date().toISOString());
+      writeAuditLog({ action: 'SELF_PASSWORD_CHANGE', userId: sess.userId, username: sess.username, displayName: sess.displayName, role: sess.role, target: sess.username, metadata: { selfService: true }, status: 'SUCCESS' });
+      try { CacheService.getScriptCache().remove('sess_' + token); } catch(ex) {}
+      try { CacheService.getScriptCache().put('pwdrev_' + sess.userId, '1', SESSION_TTL_SECS); } catch(ex) {}
+      return { success: true, message: 'เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบใหม่' };
+    }
+  }
+  return { success: false, message: 'ไม่พบบัญชีผู้ใช้' };
 }
 
 function resetUserPassword(data, token) {

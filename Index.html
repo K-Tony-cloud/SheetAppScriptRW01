@@ -192,6 +192,9 @@
             <li><a class="dropdown-item" href="#" onclick="event.preventDefault();exportPDFSummary('selected')"><i class="fas fa-file-pdf text-danger me-2"></i> PDF สรุป (ที่เลือก)</a></li>
           </ul>
         </div>
+        <button class="btn btn-outline-light btn-sm d-none" id="btnChangePassword" onclick="openChangePasswordModal()">
+          <i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน
+        </button>
         <button class="btn btn-outline-danger btn-sm d-none" id="btnLogout" onclick="logout()">
           <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
         </button>
@@ -1168,7 +1171,7 @@
                       <div class="text-danger small"><i class="fas fa-times fa-xs me-1"></i>สร้าง/แก้/Reset Admin หรือ Super Admin</div>
                     </div>
                   </div>
-                  <div class="col-12 col-sm-12 col-lg-6">
+                  <div class="col-12 col-sm-12 col-lg-6" id="roleGuide_super_admin">
                     <div class="border rounded p-2 h-100">
                       <div class="fw-bold mb-1"><span class="badge bg-danger">ซูเปอร์แอดมิน</span> <small class="text-muted">super_admin</small></div>
                       <div class="text-success small"><i class="fas fa-check fa-xs me-1"></i>ทุกสิทธิ์ในระบบ — ดู Audit ทุก Role · จัดการ User ทุกระดับ รวม Admin / Super Admin</div>
@@ -1325,6 +1328,39 @@
     </div>
   </div>
 
+  <!-- Change Password Modal -->
+  <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title"><i class="fas fa-key"></i> เปลี่ยนรหัสผ่านของฉัน</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="cpError" class="alert alert-danger d-none py-2 small mb-3"></div>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">รหัสผ่านปัจจุบัน</label>
+            <input type="password" class="form-control" id="cpCurrent" autocomplete="current-password">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">รหัสผ่านใหม่ <span class="text-muted fw-normal">(อย่างน้อย 8 ตัวอักษร)</span></label>
+            <input type="password" class="form-control" id="cpNew" autocomplete="new-password">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">ยืนยันรหัสผ่านใหม่</label>
+            <input type="password" class="form-control" id="cpConfirm" autocomplete="new-password">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times"></i> ยกเลิก</button>
+          <button type="button" class="btn btn-primary" id="cpSubmitBtn" onclick="submitChangePassword()">
+            <i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
   <script>
     // ==================== STATE ====================
@@ -1352,7 +1388,8 @@
     var domicileAmphoeMap = {};
     var bangkokAmphoeMap  = {};
     var auditCurrentPage  = 1;
-    var auditLogModal     = null;
+    var auditLogModal         = null;
+    var changePasswordModal   = null;
 
     const CLIENT_PERMISSIONS = {
       viewer:      ['view_dashboard', 'view_records'],
@@ -1401,6 +1438,7 @@
       deleteConfirmModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
       userMgmtModal      = new bootstrap.Modal(document.getElementById('userMgmtModal'));
       auditLogModal      = new bootstrap.Modal(document.getElementById('auditLogModal'));
+      changePasswordModal = new bootstrap.Modal(document.getElementById('changePasswordModal'));
 
       // Restore session from sessionStorage
       try {
@@ -1506,10 +1544,12 @@
       const navDisp = document.getElementById('navUserDisplay');
       const btnUM   = document.getElementById('btnUserMgmt');
       const btnAL   = document.getElementById('btnAuditLog');
+      const btnCP   = document.getElementById('btnChangePassword');
       if (!currentUser) {
         navDisp.classList.add('d-none');
         if (btnUM) btnUM.classList.add('d-none');
         if (btnAL) btnAL.classList.add('d-none');
+        if (btnCP) btnCP.classList.add('d-none');
         return;
       }
       navDisp.classList.remove('d-none');
@@ -1524,6 +1564,7 @@
         if (hasClientPerm('view_audit')) btnAL.classList.remove('d-none');
         else btnAL.classList.add('d-none');
       }
+      if (btnCP) btnCP.classList.remove('d-none');
     }
 
     function applyRoleUI() {
@@ -3086,6 +3127,8 @@
       if (allowed.indexOf(sel.value) === -1) sel.value = 'operator';
       var noteEl = document.getElementById('roleGuideAdminNote');
       if (noteEl) noteEl.classList.toggle('d-none', !(currentUser && currentUser.role === 'admin'));
+      var saCardEl = document.getElementById('roleGuide_super_admin');
+      if (saCardEl) saCardEl.classList.toggle('d-none', currentUser && currentUser.role === 'admin');
     }
 
     function showUserMgmt() {
@@ -3093,6 +3136,51 @@
       umRefreshAddForm();
       userMgmtModal.show();
       umLoadUsers();
+    }
+
+    function openChangePasswordModal() {
+      document.getElementById('cpCurrent').value = '';
+      document.getElementById('cpNew').value = '';
+      document.getElementById('cpConfirm').value = '';
+      var errEl = document.getElementById('cpError');
+      errEl.textContent = '';
+      errEl.classList.add('d-none');
+      changePasswordModal.show();
+    }
+
+    function submitChangePassword() {
+      var current = document.getElementById('cpCurrent').value;
+      var newPwd  = document.getElementById('cpNew').value;
+      var confirm = document.getElementById('cpConfirm').value;
+      var errEl   = document.getElementById('cpError');
+      function showCpErr(msg) { errEl.textContent = msg; errEl.classList.remove('d-none'); }
+      errEl.classList.add('d-none');
+      if (!current) { showCpErr('กรุณากรอกรหัสผ่านปัจจุบัน'); return; }
+      if (!newPwd)  { showCpErr('กรุณากรอกรหัสผ่านใหม่'); return; }
+      if (!confirm) { showCpErr('กรุณายืนยันรหัสผ่านใหม่'); return; }
+      if (newPwd !== confirm) { showCpErr('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน'); return; }
+      if (newPwd.length < 8)  { showCpErr('รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร'); return; }
+      if (newPwd === current)  { showCpErr('รหัสผ่านใหม่ต้องไม่เหมือนรหัสผ่านเดิม'); return; }
+      var btn = document.getElementById('cpSubmitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังเปลี่ยน...';
+      gasPost({ action: 'changeMyPassword', token: adminSession, currentPassword: current, newPassword: newPwd })
+        .then(function(data) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน';
+          if (data.success) {
+            changePasswordModal.hide();
+            showToast('เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบใหม่', 'success');
+            setTimeout(function() { logout(); }, 1500);
+          } else {
+            showCpErr(data.message || 'เกิดข้อผิดพลาด');
+          }
+        })
+        .catch(function() {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน';
+          showCpErr('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        });
     }
 
     function umLoadUsers() {
