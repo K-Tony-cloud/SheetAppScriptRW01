@@ -1568,7 +1568,9 @@ function listAuditLogs(data, token) {
   var filtered = [];
   for (var i = 0; i < vals.length; i++) {
     var r  = vals[i];
-    var ts = String(r[1] || '');
+    var ts = r[1] instanceof Date
+      ? Utilities.formatDate(r[1], 'Asia/Bangkok', "yyyy-MM-dd'T'HH:mm:ss")
+      : String(r[1] || '');
     if (dateFrom && ts < dateFrom) continue;
     if (dateTo   && ts > dateTo + 'T23:59:59') continue;
     if (usernameF    && String(r[3] || '').toLowerCase().indexOf(usernameF)    === -1) continue;
@@ -1581,8 +1583,11 @@ function listAuditLogs(data, token) {
   var startIdx = (page - 1) * pageSize;
   var pageData = filtered.slice(startIdx, startIdx + pageSize);
   var entries  = pageData.map(function(r) {
+    var tsStr = r[1] instanceof Date
+      ? Utilities.formatDate(r[1], 'Asia/Bangkok', "yyyy-MM-dd'T'HH:mm:ss")
+      : String(r[1] || '');
     return {
-      auditId: r[0], timestamp: r[1], userId: r[2], username: r[3],
+      auditId: r[0], timestamp: tsStr, userId: r[2], username: r[3],
       displayName: r[4], role: r[5], action: r[6], recordId: r[7],
       target: r[8], oldValue: r[9], newValue: r[10],
       metadata: r[11], sessionKey: r[12], client: r[13], status: r[14]
