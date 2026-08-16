@@ -2297,7 +2297,7 @@
         html += '<tr class="clickable-row" onclick="viewDetails(' + index + ')">' +
           '<td class="text-center" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb" data-rid="' + escHtml(rid) + '" ' + (isChecked ? 'checked' : '') + ' onchange="toggleRowSelect(\'' + escHtml(rid) + '\',event)"></td>' +
           '<td class="text-center text-muted small">' + escHtml(d[0] || '-') + '</td>' +
-          '<td class="small">' + escHtml(d[1] || '-') + '<br><span class="text-muted">' + escHtml(d[2] || '') + '</span></td>' +
+          '<td class="small">' + escHtml(displayEventDate(d[1])) + '<br><span class="text-muted">' + escHtml(d[2] || '') + '</span></td>' +
           '<td class="col-name-cell fw-bold text-primary" title="' + escHtml(rawName) + '">' + fullName + '</td>' +
           '<td class="text-center">' + visitBadge + '</td>' +
           '<td>' + noticeBadge + '</td>' +
@@ -2348,7 +2348,7 @@
         '<div class="card p-3 mb-3 border-0 shadow-sm">' +
           '<div class="detail-section-title"><i class="fas fa-calendar-alt"></i> 1. วัน/เดือน/ปี/หมายเสด็จ</div>' +
           '<div class="row">' +
-            '<div class="col-md-4"><div class="detail-label">วันที่:</div><div class="detail-value">' + v(1) + '</div></div>' +
+            '<div class="col-md-4"><div class="detail-label">วันที่:</div><div class="detail-value">' + displayEventDate(row[1]) + '</div></div>' +
             '<div class="col-md-4"><div class="detail-label">เวลา:</div><div class="detail-value">' + v(2) + '</div></div>' +
             '<div class="col-md-4"><div class="detail-label">หมายเสด็จ:</div><div class="detail-value">' + v(41) + (row[42] ? ' — ' + row[42] : '') + '</div></div>' +
           '</div>' +
@@ -2601,8 +2601,10 @@
 
     function parseDateForInput(str) {
       if (!str) return '';
-      if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str; // already ISO
-      const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      // ISO with optional time component — extract date part only (handles JSON-serialized Date objects)
+      const isoM = String(str).match(/^(\d{4}-\d{2}-\d{2})/);
+      if (isoM) return isoM[1];
+      const m = String(str).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
       if (m) {
         let y = parseInt(m[3]);
         if (y > 2400) y -= 543; // Buddhist Era → Gregorian
@@ -2613,6 +2615,15 @@
 
     // Converts stored DD/MM/BBBB → YYYY-MM-DD for HTML date inputs.
     function storageDateToHtmlDate(value) { return parseDateForInput(value); }
+
+    // Formats col2 (Event Date) from any stored format to DD/MM/BBBB for UI display.
+    // Works for JSON-serialized Date objects ("2025-08-06T00:00:00.000Z"), ISO strings,
+    // and all legacy text formats handled by normalizePersonDate.
+    function displayEventDate(raw) {
+      if (!raw) return '-';
+      var nd = normalizePersonDate(raw);
+      return nd.valid ? nd.display : (String(raw).replace(/^'/, '') || '-');
+    }
 
     function cancelEdit() {
       if (currentLockToken && currentEditRecordId) {

@@ -140,29 +140,15 @@ function doPost(e) {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initSoftDeleteColumns();
     }
-    else if (action === 'previewNormalize') {
+    else if (action === 'standardizeEventDateFormat') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
-      else result = previewNormalizeEventDates();
+      else result = standardizeEventDateFormat();
     }
-    else if (action === 'migrateEventDates') {
-      // DISABLED: col B stores valid Date objects — string rewrite is not safe.
-      result = { success: false, message: 'migrateEventDates disabled — underlying Date objects must not be overwritten with text strings' };
-    }
-    else if (action === 'colBFormats') {
-      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
-      else result = checkColBFormats();
-    }
-    else if (action === 'auditColBYears') {
-      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
-      else result = auditColBDateYears();
-    }
-    else if (action === 'previewBEFix') {
-      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
-      else result = previewFixBEGregorianDates();
-    }
-    else if (action === 'fixBEDates') {
-      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
-      else result = fixBEGregorianDates();
+    // Maintenance routes — disabled after date system closure
+    else if (action === 'previewNormalize' || action === 'migrateEventDates' ||
+             action === 'colBFormats'      || action === 'auditColBYears'     ||
+             action === 'previewBEFix'     || action === 'fixBEDates') {
+      result = { success: false, message: action + ' disabled — date system maintenance complete' };
     }
     else if (action === 'initRecordIdCounter') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
@@ -2554,4 +2540,73 @@ function fixBEGregorianDates() {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * Formatting-only: applies dd/MM/yyyy number format to all col B data rows.
+ * Does NOT call setValues — Date objects are untouched.
+ * Idempotent: safe to run multiple times.
+ * Returns a full verification report in one response.
+ */
+function standardizeEventDateFormat() {
+  var ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet   = ss.getSheetByName(SHEET_NAME);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: true, message: 'ไม่มีข้อมูล', total: 0 };
+
+  var numRows    = lastRow - 1;
+  var TARGET_FMT = 'dd/MM/yyyy';
+
+  // Format-only — no setValues, no Date object changes
+  sheet.getRange(2, 2, numRows, 1).setNumberFormat(TARGET_FMT);
+  SpreadsheetApp.flush();
+
+  // Post-format verification
+  var rawVals  = sheet.getRange(2, 2, numRows, 1).getValues();
+  var dispVals = sheet.getRange(2, 2, numRows, 1).getDisplayValues();
+  var fmts     = sheet.getRange(2, 2, numRows, 1).getNumberFormats();
+  var recIds   = sheet.getRange(2, 1, numRows, 1).getValues();
+
+  var dateCount = 0, nonDateCount = 0;
+  var fmtCounts = {}, yearCounts = {};
+  var suspicious = 0;
+  var spotlight  = { '25': null, '399': null, '419': null };
+
+  for (var i = 0; i < numRows; i++) {
+    var cellVal = rawVals[i][0];
+    var isDate  = Object.prototype.toString.call(cellVal) === '[object Date]' && !isNaN(cellVal.getTime());
+    if (isDate) {
+      dateCount++;
+      var bkk = Utilities.formatDate(cellVal, 'Asia/Bangkok', 'yyyy-MM-dd');
+      var yr  = parseInt(bkk.split('-')[0]);
+      yearCounts[yr] = (yearCounts[yr] || 0) + 1;
+      if (yr >= 2400) suspicious++;
+    } else {
+      nonDateCount++;
+    }
+    var fmt = fmts[i][0];
+    fmtCounts[fmt] = (fmtCounts[fmt] || 0) + 1;
+    var recId = String(recIds[i][0]);
+    if (spotlight.hasOwnProperty(recId)) {
+      spotlight[recId] = {
+        recordId:      recId,
+        underlyingDate: isDate ? Utilities.formatDate(rawVals[i][0], 'Asia/Bangkok', 'yyyy-MM-dd') : null,
+        displayValue:  dispVals[i][0],
+        format:        fmt
+      };
+    }
+  }
+
+  return {
+    success:           true,
+    formatApplied:     TARGET_FMT,
+    total:             numRows,
+    dateObjectCount:   dateCount,
+    nonDateCount:      nonDateCount,
+    uniqueFormatCount: Object.keys(fmtCounts).length,
+    formats:           fmtCounts,
+    yearDistribution:  yearCounts,
+    suspiciousCount:   suspicious,
+    spotlightRecords:  spotlight
+  };
 }
