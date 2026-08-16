@@ -1303,12 +1303,14 @@
     const CLIENT_PERMISSIONS = {
       viewer:      ['view_dashboard', 'view_records'],
       report:      ['view_dashboard', 'view_records', 'export_records'],
-      operator:    ['view_dashboard', 'view_records', 'create_record', 'upload_attachment', 'export_records'],
-      admin:       ['view_dashboard', 'view_records', 'create_record', 'upload_attachment',
-                    'edit_record', 'delete_record', 'export_records', 'manage_attachments'],
-      super_admin: ['view_dashboard', 'view_records', 'create_record', 'upload_attachment',
-                    'edit_record', 'delete_record', 'export_records', 'manage_attachments',
-                    'manage_users', 'manage_system', 'view_audit']
+      operator:    ['view_dashboard', 'view_records', 'create_record', 'edit_record',
+                    'upload_attachment', 'manage_attachments', 'export_records'],
+      admin:       ['view_dashboard', 'view_records', 'create_record', 'edit_record',
+                    'upload_attachment', 'manage_attachments', 'delete_record',
+                    'export_records', 'view_audit', 'manage_users'],
+      super_admin: ['view_dashboard', 'view_records', 'create_record', 'edit_record',
+                    'upload_attachment', 'manage_attachments', 'delete_record',
+                    'export_records', 'view_audit', 'manage_users', 'manage_system']
     };
     const ROLE_LABELS = {
       viewer:      { label: 'ดูข้อมูล',        cls: 'bg-secondary' },
@@ -3014,8 +3016,25 @@
     }
 
     // ==================== USER MANAGEMENT ====================
+    function umGetAllowedRoles() {
+      return (currentUser && currentUser.role === 'super_admin')
+        ? ['viewer','report','operator','admin','super_admin']
+        : ['viewer','report','operator'];
+    }
+
+    function umRefreshAddForm() {
+      var sel = document.getElementById('um_role');
+      if (!sel) return;
+      var allowed = umGetAllowedRoles();
+      Array.prototype.forEach.call(sel.options, function(opt) {
+        opt.style.display = allowed.indexOf(opt.value) !== -1 ? '' : 'none';
+      });
+      if (allowed.indexOf(sel.value) === -1) sel.value = 'operator';
+    }
+
     function showUserMgmt() {
       if (!hasClientPerm('manage_users')) return;
+      umRefreshAddForm();
       userMgmtModal.show();
       umLoadUsers();
     }
@@ -3027,6 +3046,7 @@
         .then(function(data) {
           if (!data.success) { listEl.innerHTML = '<div class="text-danger p-2">' + data.message + '</div>'; return; }
           if (!data.users || !data.users.length) { listEl.innerHTML = '<div class="text-muted p-2 text-center">ยังไม่มีผู้ใช้งาน</div>'; return; }
+          var umRoleOpts = umGetAllowedRoles();
           var rows = data.users.map(function(u) {
             const ri = ROLE_LABELS[u.role] || { label: u.role, cls: 'bg-secondary' };
             const activeToggle = u.active
@@ -3039,7 +3059,7 @@
               + '<td><span class="badge ' + ri.cls + '">' + ri.label + '</span></td>'
               + '<td class="small">'
               +   '<select class="form-select form-select-sm py-0" style="min-width:110px" onchange="umChangeRole(\'' + u.userId + '\', this.value)">'
-              +   ['viewer','report','operator','admin','super_admin'].map(function(r) {
+              +   umRoleOpts.map(function(r) {
                     return '<option value="' + r + '"' + (r === u.role ? ' selected' : '') + '>' + (ROLE_LABELS[r] ? ROLE_LABELS[r].label : r) + '</option>';
                   }).join('')
               +   '</select>'

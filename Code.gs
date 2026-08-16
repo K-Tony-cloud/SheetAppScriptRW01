@@ -30,13 +30,16 @@ const AUDIT_SHEET_NAME = 'AuditLog';
 const PERMISSIONS = {
   viewer:      ['view_dashboard', 'view_records'],
   report:      ['view_dashboard', 'view_records', 'export_records'],
-  operator:    ['view_dashboard', 'view_records', 'create_record', 'upload_attachment', 'export_records'],
-  admin:       ['view_dashboard', 'view_records', 'create_record', 'upload_attachment',
-                'edit_record', 'delete_record', 'export_records', 'manage_attachments'],
-  super_admin: ['view_dashboard', 'view_records', 'create_record', 'upload_attachment',
-                'edit_record', 'delete_record', 'export_records', 'manage_attachments',
-                'manage_users', 'manage_system', 'view_audit']
+  operator:    ['view_dashboard', 'view_records', 'create_record', 'edit_record',
+                'upload_attachment', 'manage_attachments', 'export_records'],
+  admin:       ['view_dashboard', 'view_records', 'create_record', 'edit_record',
+                'upload_attachment', 'manage_attachments', 'delete_record',
+                'export_records', 'view_audit', 'manage_users'],
+  super_admin: ['view_dashboard', 'view_records', 'create_record', 'edit_record',
+                'upload_attachment', 'manage_attachments', 'delete_record',
+                'export_records', 'view_audit', 'manage_users', 'manage_system']
 };
+const ADMIN_MANAGEABLE_ROLES = ['viewer', 'report', 'operator'];
 
 // ===== HTTP ENTRY POINTS =====
 
@@ -313,12 +316,16 @@ function hasPermission(token, permission) {
 
 function listUsers(token) {
   if (!hasPermission(token, 'manage_users')) return { success: false, message: 'ไม่มีสิทธิ์' };
+  var requesterSession = getSession(token);
+  var isAdmin = requesterSession && requesterSession.role === 'admin';
   var sheet = getOrCreateUsersSheet();
   if (sheet.getLastRow() <= 1) return { success: true, users: [] };
   var vals  = sheet.getRange(2, 1, sheet.getLastRow() - 1, 10).getValues();
-  var users = vals.map(function(r) {
-    return { userId: r[0], username: r[1], displayName: r[4], role: r[5], active: !!r[6], lastLoginAt: r[7], createdAt: r[8] };
-  });
+  var users = vals
+    .filter(function(r) { return isAdmin ? ADMIN_MANAGEABLE_ROLES.indexOf(String(r[5])) !== -1 : true; })
+    .map(function(r) {
+      return { userId: r[0], username: r[1], displayName: r[4], role: r[5], active: !!r[6], lastLoginAt: r[7], createdAt: r[8] };
+    });
   return { success: true, users: users };
 }
 
@@ -326,6 +333,10 @@ function createUser(data, token) {
   if (!hasPermission(token, 'manage_users')) return { success: false, message: 'ไม่มีสิทธิ์' };
   if (!data.username || !data.password || !data.role) return { success: false, message: 'ข้อมูลไม่ครบ: username, password, role' };
   if (!PERMISSIONS[data.role]) return { success: false, message: 'role ไม่ถูกต้อง: ' + data.role };
+  var _cs = getSession(token);
+  if (_cs && _cs.role === 'admin' && ADMIN_MANAGEABLE_ROLES.indexOf(data.role) === -1) {
+    return { success: false, message: 'ไม่มีสิทธิ์สร้างบัญชี role นี้' };
+  }
   var sheet   = getOrCreateUsersSheet();
   var lastRow = sheet.getLastRow();
   if (lastRow > 1) {
@@ -353,9 +364,20 @@ function updateUser(data, token) {
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) return { success: false, message: 'ไม่พบผู้ใช้' };
   var vals = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  var _us = getSession(token);
+  var _requesterIsAdmin = _us && _us.role === 'admin';
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(data.userId)) {
-      var isSA           = String(vals[i][5]) === 'super_admin';
+      var targetRole = String(vals[i][5]);
+      if (_requesterIsAdmin) {
+        if (ADMIN_MANAGEABLE_ROLES.indexOf(targetRole) === -1) {
+          return { success: false, message: 'ไม่มีสิทธิ์จัดการผู้ใช้ระดับนี้' };
+        }
+        if (data.role !== undefined && ADMIN_MANAGEABLE_ROLES.indexOf(data.role) === -1) {
+          return { success: false, message: 'ไม่มีสิทธิ์กำหนด role นี้' };
+        }
+      }
+      var isSA           = targetRole === 'super_admin';
       var willDowngrade  = data.role !== undefined && PERMISSIONS[data.role] && data.role !== 'super_admin';
       var willDeactivate = data.active !== undefined && !data.active;
       if (isSA && (willDowngrade || willDeactivate)) {
@@ -397,8 +419,13 @@ function resetUserPassword(data, token) {
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) return { success: false, message: 'ไม่พบผู้ใช้' };
   var vals = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  var _rs = getSession(token);
+  var _resetIsAdmin = _rs && _rs.role === 'admin';
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(data.userId)) {
+      if (_resetIsAdmin && ADMIN_MANAGEABLE_ROLES.indexOf(String(vals[i][5])) === -1) {
+        return { success: false, message: 'ไม่มีสิทธิ์จัดการผู้ใช้ระดับนี้' };
+      }
       var rowNum = i + 2;
       var salt   = generateSalt();
       var hash   = hashPassword(data.newPassword, salt);
@@ -1555,6 +1582,8 @@ function batchWriteAuditLogs(entries) {
 function listAuditLogs(data, token) {
   var auditSheet   = getOrCreateAuditLogSheet();
   if (auditSheet.getLastRow() <= 1) return { success: true, entries: [], total: 0, page: 1, pageSize: 50 };
+  var _alSession   = getSession(token);
+  var _alIsAdmin   = _alSession && _alSession.role === 'admin';
   var page         = Math.max(1, parseInt(data.page         || '1'));
   var pageSize     = Math.min(200, Math.max(1, parseInt(data.pageSize  || '50')));
   var dateFrom     = (data.dateFrom     || '').toString().trim();
@@ -1567,6 +1596,7 @@ function listAuditLogs(data, token) {
   var filtered = [];
   for (var i = 0; i < vals.length; i++) {
     var r  = vals[i];
+    if (_alIsAdmin && String(r[5] || '') === 'super_admin') continue;
     var ts = r[1] instanceof Date
       ? Utilities.formatDate(r[1], 'Asia/Bangkok', "yyyy-MM-dd'T'HH:mm:ss")
       : String(r[1] || '');
