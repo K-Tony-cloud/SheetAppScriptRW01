@@ -152,6 +152,10 @@ function doPost(e) {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = checkColBFormats();
     }
+    else if (action === 'auditColBYears') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = auditColBDateYears();
+    }
     else if (action === 'initRecordIdCounter') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initRecordIdCounter();
@@ -2342,5 +2346,64 @@ function checkColBFormats() {
     nonDateCount: numRows - dateCount,
     uniqueFormatCount: formatList.length,
     formats: formatList
+  };
+}
+
+/**
+ * READ-ONLY: Extracts underlying Gregorian year/month/day (Asia/Bangkok) for every col B Date object.
+ * Reports year distribution, suspicious records (underlying year >= 2400), and specific recordIds.
+ * No writes of any kind.
+ */
+function auditColBDateYears() {
+  var ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet   = ss.getSheetByName(SHEET_NAME);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: true, total: 0, yearDistribution: [], suspiciousCount: 0, suspicious: [] };
+
+  var numRows  = lastRow - 1;
+  var rawVals  = sheet.getRange(2, 1, numRows, 2).getValues();        // col A = recordId, col B = date
+  var dispVals = sheet.getRange(2, 2, numRows, 1).getDisplayValues();
+  var fmts     = sheet.getRange(2, 2, numRows, 1).getNumberFormats();
+
+  // RecordIDs to spotlight individually
+  var SPOTLIGHT = { '25': null, '26': null, '27': null };
+
+  var yearCounts  = {};
+  var suspicious  = []; // underlying CE year >= 2400
+
+  for (var i = 0; i < numRows; i++) {
+    var cellVal = rawVals[i][1];
+    var recId   = String(rawVals[i][0]);
+    var dispVal = dispVals[i][0];
+    var fmt     = fmts[i][0];
+    var isDate  = Object.prototype.toString.call(cellVal) === '[object Date]' && !isNaN(cellVal.getTime());
+
+    if (!isDate) continue; // skip blank/non-date
+
+    // Extract Gregorian (CE) date in Asia/Bangkok — no +543
+    var bkk   = Utilities.formatDate(cellVal, 'Asia/Bangkok', 'yyyy-MM-dd');
+    var parts = bkk.split('-');
+    var year  = parseInt(parts[0]);
+
+    yearCounts[year] = (yearCounts[year] || 0) + 1;
+
+    var info = { sheetRow: i+2, recordId: recId, underlyingGregorianDate: bkk, displayValue: dispVal, numberFormat: fmt };
+
+    if (SPOTLIGHT.hasOwnProperty(recId)) SPOTLIGHT[recId] = info;
+
+    if (year >= 2400) suspicious.push(info);
+  }
+
+  var yearList = Object.keys(yearCounts).map(function(y) {
+    return { year: parseInt(y), count: yearCounts[y] };
+  }).sort(function(a, b) { return a.year - b.year; });
+
+  return {
+    success: true,
+    total: numRows,
+    yearDistribution: yearList,
+    suspiciousCount: suspicious.length,
+    suspicious: suspicious,       // every record with CE year >= 2400
+    spotlightRecords: SPOTLIGHT   // RecordIDs 25, 26, 27
   };
 }
