@@ -101,7 +101,8 @@ function doPost(e) {
     else if (action === 'createUser')          result = createUser(data, token);
     else if (action === 'updateUser')          result = updateUser(data, token);
     else if (action === 'resetUserPassword')   result = resetUserPassword(data, token);
-    else if (action === 'changeMyPassword')    result = changeMyPassword(data, token);
+    else if (action === 'changeMyPassword')      result = changeMyPassword(data, token);
+    else if (action === 'updateMyDisplayName')  result = updateMyDisplayName(data, token);
     else if (action === 'initUserSystem')      result = { success: false, message: 'Initialization endpoint disabled' };
     else if (action === 'initMetadataColumns') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
@@ -420,8 +421,10 @@ function changeMyPassword(data, token) {
   if (!validateSession(token)) return { success: false, message: 'Session หมดอายุ กรุณาเข้าสู่ระบบใหม่' };
   var sess = getSession(token);
   if (!sess) return { success: false, message: 'ไม่พบ session' };
-  if (!data.currentPassword || !data.newPassword) return { success: false, message: 'กรุณากรอกข้อมูลให้ครบ' };
+  if (!data.newPassword) return { success: false, message: 'กรุณากรอกรหัสผ่านใหม่' };
   if (data.newPassword.length < 8) return { success: false, message: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร' };
+  var isPrivileged = (sess.role === 'admin' || sess.role === 'super_admin');
+  if (!isPrivileged && !data.currentPassword) return { success: false, message: 'กรุณากรอกรหัสผ่านปัจจุบัน' };
   var sheet   = getOrCreateUsersSheet();
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) return { success: false, message: 'ไม่พบข้อมูลผู้ใช้' };
@@ -429,10 +432,12 @@ function changeMyPassword(data, token) {
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(sess.userId)) {
       if (!vals[i][6]) return { success: false, message: 'บัญชีถูกระงับ' };
-      var storedHash  = String(vals[i][2]);
-      var storedSalt  = String(vals[i][3]);
-      var currentHash = hashPassword(data.currentPassword, storedSalt);
-      if (currentHash !== storedHash) return { success: false, message: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' };
+      var storedHash = String(vals[i][2]);
+      var storedSalt = String(vals[i][3]);
+      if (!isPrivileged) {
+        var currentHash = hashPassword(data.currentPassword, storedSalt);
+        if (currentHash !== storedHash) return { success: false, message: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' };
+      }
       var newHashCheck = hashPassword(data.newPassword, storedSalt);
       if (newHashCheck === storedHash) return { success: false, message: 'รหัสผ่านใหม่ต้องไม่เหมือนรหัสผ่านเดิม' };
       var newSalt   = generateSalt();
@@ -445,6 +450,37 @@ function changeMyPassword(data, token) {
       try { CacheService.getScriptCache().remove('sess_' + token); } catch(ex) {}
       try { CacheService.getScriptCache().put('pwdrev_' + sess.userId, '1', SESSION_TTL_SECS); } catch(ex) {}
       return { success: true, message: 'เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบใหม่' };
+    }
+  }
+  return { success: false, message: 'ไม่พบบัญชีผู้ใช้' };
+}
+
+function updateMyDisplayName(data, token) {
+  if (!validateSession(token)) return { success: false, message: 'Session หมดอายุ กรุณาเข้าสู่ระบบใหม่' };
+  var sess = getSession(token);
+  if (!sess) return { success: false, message: 'ไม่พบ session' };
+  var name = (String(data.displayName || '')).trim();
+  if (!name) return { success: false, message: 'กรุณากรอกชื่อที่แสดง' };
+  if (name.length > 100) return { success: false, message: 'ชื่อที่แสดงยาวเกินไป (สูงสุด 100 ตัวอักษร)' };
+  var sheet   = getOrCreateUsersSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { success: false, message: 'ไม่พบข้อมูลผู้ใช้' };
+  var vals = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]) === String(sess.userId)) {
+      if (!vals[i][6]) return { success: false, message: 'บัญชีถูกระงับ' };
+      var oldName = String(vals[i][4]);
+      sheet.getRange(i + 2, 5).setValue(name);
+      try {
+        var raw = CacheService.getScriptCache().get('sess_' + token);
+        if (raw) {
+          var s = JSON.parse(raw);
+          s.displayName = name;
+          CacheService.getScriptCache().put('sess_' + token, JSON.stringify(s), SESSION_TTL_SECS);
+        }
+      } catch(ex) {}
+      writeAuditLog({ action: 'SELF_DISPLAY_NAME_CHANGE', userId: sess.userId, username: sess.username, displayName: name, role: sess.role, target: 'display_name', oldVal: oldName, newVal: name, status: 'SUCCESS' });
+      return { success: true, message: 'แก้ไขชื่อที่แสดงสำเร็จ', displayName: name };
     }
   }
   return { success: false, message: 'ไม่พบบัญชีผู้ใช้' };
@@ -1735,5 +1771,36 @@ function cleanupTestAuditRows() {
     auditSheet.deleteRow(toDelete[j].row);
   }
   Logger.log('=== DONE: Deleted ' + toDelete.length + ' test rows ===');
+  SpreadsheetApp.flush();
+}
+
+// ONE-TIME MAINTENANCE — run from GAS Editor only, not callable via web API
+function cleanupUnderscoreTestAuditRows() {
+  var auditSheet = getOrCreateAuditLogSheet();
+  var lastRow = auditSheet.getLastRow();
+  if (lastRow <= 1) { Logger.log('AuditLog is empty.'); return; }
+  var vals = auditSheet.getRange(2, 1, lastRow - 1, 15).getValues();
+  var toDelete = [];
+  for (var i = 0; i < vals.length; i++) {
+    var username = String(vals[i][3] || '');
+    var target   = String(vals[i][8] || '');
+    var meta     = String(vals[i][11] || '');
+    var reason   = '';
+    if (/_test\b/i.test(username)) reason = 'username_contains_test';
+    else if (/_test\b/i.test(target)) reason = 'target_contains_test';
+    else if (meta.indexOf('_test') !== -1) reason = 'meta_contains_test';
+    if (reason) {
+      toDelete.push({ row: i + 2, auditId: String(vals[i][0]), ts: String(vals[i][1]), username: username, action: String(vals[i][6]), target: target, reason: reason });
+    }
+  }
+  if (toDelete.length === 0) { Logger.log('No _test entries found. Nothing deleted.'); return; }
+  Logger.log('=== PREVIEW: _test AUDIT ROWS TO DELETE (' + toDelete.length + ') ===');
+  toDelete.forEach(function(e) {
+    Logger.log('  AuditID=' + e.auditId + '  ts=' + e.ts + '  user=' + e.username + '  action=' + e.action + '  target=' + e.target + '  reason=' + e.reason + '  sheetRow=' + e.row);
+  });
+  for (var j = toDelete.length - 1; j >= 0; j--) {
+    auditSheet.deleteRow(toDelete[j].row);
+  }
+  Logger.log('=== DONE: Deleted ' + toDelete.length + ' _test rows ===');
   SpreadsheetApp.flush();
 }

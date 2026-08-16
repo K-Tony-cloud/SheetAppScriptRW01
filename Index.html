@@ -192,6 +192,9 @@
             <li><a class="dropdown-item" href="#" onclick="event.preventDefault();exportPDFSummary('selected')"><i class="fas fa-file-pdf text-danger me-2"></i> PDF สรุป (ที่เลือก)</a></li>
           </ul>
         </div>
+        <button class="btn btn-outline-light btn-sm d-none" id="btnEditName" onclick="openEditNameModal()">
+          <i class="fas fa-user-edit"></i> แก้ไขชื่อ
+        </button>
         <button class="btn btn-outline-light btn-sm d-none" id="btnChangePassword" onclick="openChangePasswordModal()">
           <i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน
         </button>
@@ -236,7 +239,7 @@
     <!-- ===== WELCOME VIEW ===== -->
     <div id="welcomeView" class="welcome-container d-none">
       <i class="fas fa-landmark text-primary mb-3 icon-float" style="font-size: 5rem; text-shadow: 0 10px 20px rgba(13, 110, 253, 0.2);"></i>
-      <h1 class="fw-bold mb-3 fade-up delay-1" style="color: #1a252f;">ระบบฐานข้อมูลผู้มาติดต่อ</h1>
+      <h1 class="fw-bold mb-3 fade-up delay-1" style="color: #1a252f;">ระบบฐานข้อมูลผู้มาถวายฎีกา</h1>
       <p class="text-muted mb-5 fs-5 fade-up delay-2">สถานีตำรวจนครบาลพระราชวัง</p>
       <div class="row w-100 justify-content-center fade-up delay-3">
         <div class="col-md-6 col-lg-4" id="btnFormWrapper">
@@ -268,7 +271,7 @@
         <div class="col-lg-4 d-flex">
           <div class="dash-main-card summary-card active" id="card-all" onclick="filterByCard('all')">
             <div class="main-icon"><i class="fas fa-users"></i></div>
-            <div class="main-label">ผู้เข้ามาติดต่อทั้งหมด</div>
+            <div class="main-label">รายการผู้ถวายฎีกาทั้งหมด</div>
             <div class="main-number" id="totalCount"><i class="fas fa-spinner fa-spin fs-3"></i></div>
             <div class="main-unit">ราย</div>
           </div>
@@ -1328,6 +1331,32 @@
     </div>
   </div>
 
+  <!-- Edit Display Name Modal -->
+  <div class="modal fade" id="editNameModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+        <div class="modal-header bg-secondary text-white">
+          <h5 class="modal-title"><i class="fas fa-user-edit"></i> แก้ไขชื่อที่แสดง</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="enError" class="alert alert-danger d-none py-2 small mb-3"></div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold">ชื่อที่แสดง</label>
+            <input type="text" class="form-control" id="enDisplayName" maxlength="100" autocomplete="off">
+            <div class="form-text small">สูงสุด 100 ตัวอักษร</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><i class="fas fa-times"></i> ยกเลิก</button>
+          <button type="button" class="btn btn-primary btn-sm" id="enSubmitBtn" onclick="submitEditDisplayName()">
+            <i class="fas fa-save"></i> บันทึก
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Change Password Modal -->
   <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -1338,7 +1367,7 @@
         </div>
         <div class="modal-body">
           <div id="cpError" class="alert alert-danger d-none py-2 small mb-3"></div>
-          <div class="mb-3">
+          <div class="mb-3" id="cpCurrentGroup">
             <label class="form-label small fw-bold">รหัสผ่านปัจจุบัน</label>
             <input type="password" class="form-control" id="cpCurrent" autocomplete="current-password">
           </div>
@@ -1390,6 +1419,7 @@
     var auditCurrentPage  = 1;
     var auditLogModal         = null;
     var changePasswordModal   = null;
+    var editNameModal         = null;
 
     const CLIENT_PERMISSIONS = {
       viewer:      ['view_dashboard', 'view_records'],
@@ -1439,6 +1469,7 @@
       userMgmtModal      = new bootstrap.Modal(document.getElementById('userMgmtModal'));
       auditLogModal      = new bootstrap.Modal(document.getElementById('auditLogModal'));
       changePasswordModal = new bootstrap.Modal(document.getElementById('changePasswordModal'));
+      editNameModal       = new bootstrap.Modal(document.getElementById('editNameModal'));
 
       // Restore session from sessionStorage
       try {
@@ -1545,11 +1576,13 @@
       const btnUM   = document.getElementById('btnUserMgmt');
       const btnAL   = document.getElementById('btnAuditLog');
       const btnCP   = document.getElementById('btnChangePassword');
+      const btnEN   = document.getElementById('btnEditName');
       if (!currentUser) {
         navDisp.classList.add('d-none');
         if (btnUM) btnUM.classList.add('d-none');
         if (btnAL) btnAL.classList.add('d-none');
         if (btnCP) btnCP.classList.add('d-none');
+        if (btnEN) btnEN.classList.add('d-none');
         return;
       }
       navDisp.classList.remove('d-none');
@@ -1565,6 +1598,7 @@
         else btnAL.classList.add('d-none');
       }
       if (btnCP) btnCP.classList.remove('d-none');
+      if (btnEN) btnEN.classList.remove('d-none');
     }
 
     function applyRoleUI() {
@@ -3139,6 +3173,9 @@
     }
 
     function openChangePasswordModal() {
+      var isPrivileged = currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin');
+      var grp = document.getElementById('cpCurrentGroup');
+      if (grp) grp.classList.toggle('d-none', !!isPrivileged);
       document.getElementById('cpCurrent').value = '';
       document.getElementById('cpNew').value = '';
       document.getElementById('cpConfirm').value = '';
@@ -3149,22 +3186,25 @@
     }
 
     function submitChangePassword() {
+      var isPrivileged = currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin');
       var current = document.getElementById('cpCurrent').value;
       var newPwd  = document.getElementById('cpNew').value;
       var confirm = document.getElementById('cpConfirm').value;
       var errEl   = document.getElementById('cpError');
       function showCpErr(msg) { errEl.textContent = msg; errEl.classList.remove('d-none'); }
       errEl.classList.add('d-none');
-      if (!current) { showCpErr('กรุณากรอกรหัสผ่านปัจจุบัน'); return; }
+      if (!isPrivileged && !current) { showCpErr('กรุณากรอกรหัสผ่านปัจจุบัน'); return; }
       if (!newPwd)  { showCpErr('กรุณากรอกรหัสผ่านใหม่'); return; }
       if (!confirm) { showCpErr('กรุณายืนยันรหัสผ่านใหม่'); return; }
       if (newPwd !== confirm) { showCpErr('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน'); return; }
       if (newPwd.length < 8)  { showCpErr('รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร'); return; }
-      if (newPwd === current)  { showCpErr('รหัสผ่านใหม่ต้องไม่เหมือนรหัสผ่านเดิม'); return; }
+      if (!isPrivileged && newPwd === current) { showCpErr('รหัสผ่านใหม่ต้องไม่เหมือนรหัสผ่านเดิม'); return; }
       var btn = document.getElementById('cpSubmitBtn');
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังเปลี่ยน...';
-      gasPost({ action: 'changeMyPassword', token: adminSession, currentPassword: current, newPassword: newPwd })
+      var payload = { action: 'changeMyPassword', token: adminSession, newPassword: newPwd };
+      if (!isPrivileged) payload.currentPassword = current;
+      gasPost(payload)
         .then(function(data) {
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน';
@@ -3180,6 +3220,47 @@
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน';
           showCpErr('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        });
+    }
+
+    function openEditNameModal() {
+      var errEl = document.getElementById('enError');
+      errEl.textContent = '';
+      errEl.classList.add('d-none');
+      document.getElementById('enDisplayName').value = (currentUser && currentUser.displayName) || '';
+      editNameModal.show();
+    }
+
+    function submitEditDisplayName() {
+      var name  = (document.getElementById('enDisplayName').value || '').trim();
+      var errEl = document.getElementById('enError');
+      function showEnErr(msg) { errEl.textContent = msg; errEl.classList.remove('d-none'); }
+      errEl.classList.add('d-none');
+      if (!name) { showEnErr('กรุณากรอกชื่อที่แสดง'); return; }
+      if (name.length > 100) { showEnErr('ชื่อที่แสดงยาวเกินไป (สูงสุด 100 ตัวอักษร)'); return; }
+      var btn = document.getElementById('enSubmitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
+      gasPost({ action: 'updateMyDisplayName', token: adminSession, displayName: name })
+        .then(function(data) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-save"></i> บันทึก';
+          if (data.success) {
+            editNameModal.hide();
+            if (currentUser) {
+              currentUser.displayName = data.displayName || name;
+              document.getElementById('navUserName').textContent = currentUser.displayName;
+              try { sessionStorage.setItem('rw01_user', JSON.stringify(currentUser)); } catch(ex) {}
+            }
+            showToast('แก้ไขชื่อที่แสดงสำเร็จ', 'success');
+          } else {
+            showEnErr(data.message || 'เกิดข้อผิดพลาด');
+          }
+        })
+        .catch(function() {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-save"></i> บันทึก';
+          showEnErr('เกิดข้อผิดพลาดในการเชื่อมต่อ');
         });
     }
 
@@ -3713,7 +3794,7 @@
         'th{background:#e9ecef;font-weight:700}tr:nth-child(even){background:#f9f9f9}' +
         '@media print{button{display:none}}' +
         '</style></head><body>' +
-        '<h1>ระบบฐานข้อมูลผู้มาติดต่อ สน.พระราชวัง</h1>' +
+        '<h1>ระบบฐานข้อมูลผู้มาถวายฎีกา สน.พระราชวัง</h1>' +
         '<p class="sub">สรุปผล: ' + scopeLabel + ' | จำนวน ' + data.length + ' ราย | วันที่พิมพ์: ' + nowStr + '</p>' +
         '<table><thead><tr><th>#</th><th>วันที่/เวลา</th><th>ชื่อ-สกุล</th><th>เรื่องโดยสังเขป</th><th>หมายฯ</th><th>สถานที่พบ</th><th>เจ้าหน้าที่</th></tr></thead>' +
         '<tbody>' + rows + '</tbody></table>' +
