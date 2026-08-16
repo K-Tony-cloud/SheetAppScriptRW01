@@ -156,6 +156,14 @@ function doPost(e) {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = auditColBDateYears();
     }
+    else if (action === 'previewBEFix') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = previewFixBEGregorianDates();
+    }
+    else if (action === 'fixBEDates') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = fixBEGregorianDates();
+    }
     else if (action === 'initRecordIdCounter') {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = initRecordIdCounter();
@@ -2406,4 +2414,144 @@ function auditColBDateYears() {
     suspicious: suspicious,       // every record with CE year >= 2400
     spotlightRecords: SPOTLIGHT   // RecordIDs 25, 26, 27
   };
+}
+
+// ===== TARGETED BE-AS-GREGORIAN CORRECTION =====
+// 12 records where underlying Gregorian year = 2569 (Buddhist year stored as CE by mistake).
+// Correction: year 2569 CE → year 2026 CE (2026 = 2569 - 543). Month/day unchanged.
+var BE_GREGORIAN_TARGET_IDS = ['25','389','399','400','401','402','412','413','415','416','418','419'];
+
+/**
+ * READ-ONLY dry-run. Scans col B for Date objects with underlying Gregorian year = 2569.
+ * Pass condition: foundCount === 12, no missing or unexpected RecordIDs, all year === 2569.
+ */
+function previewFixBEGregorianDates() {
+  var ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet   = ss.getSheetByName(SHEET_NAME);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, pass: false, message: 'ไม่มีข้อมูล' };
+
+  var numRows  = lastRow - 1;
+  var rawVals  = sheet.getRange(2, 1, numRows, 2).getValues();
+  var dispVals = sheet.getRange(2, 2, numRows, 1).getDisplayValues();
+  var fmts     = sheet.getRange(2, 2, numRows, 1).getNumberFormats();
+
+  var found = [];
+
+  for (var i = 0; i < numRows; i++) {
+    var cellVal = rawVals[i][1];
+    var isDate  = Object.prototype.toString.call(cellVal) === '[object Date]' && !isNaN(cellVal.getTime());
+    if (!isDate) continue;
+    var bkk  = Utilities.formatDate(cellVal, 'Asia/Bangkok', 'yyyy-MM-dd');
+    var year = parseInt(bkk.split('-')[0]);
+    if (year !== 2569) continue;
+    var parts = bkk.split('-');
+    found.push({
+      sheetRow:             i + 2,
+      recordId:             String(rawVals[i][0]),
+      currentGregorianDate: bkk,
+      correctedDate:        '2026-' + parts[1] + '-' + parts[2],
+      displayValue:         dispVals[i][0],
+      numberFormat:         fmts[i][0],
+      inExpectedList:       BE_GREGORIAN_TARGET_IDS.indexOf(String(rawVals[i][0])) !== -1
+    });
+  }
+
+  var foundIds    = found.map(function(r) { return r.recordId; });
+  var missingIds  = BE_GREGORIAN_TARGET_IDS.filter(function(id) { return foundIds.indexOf(id) === -1; });
+  var unexpectedIds = foundIds.filter(function(id) { return BE_GREGORIAN_TARGET_IDS.indexOf(id) === -1; });
+
+  var pass = found.length === 12 && missingIds.length === 0 && unexpectedIds.length === 0;
+
+  return {
+    success: true,
+    pass:           pass,
+    foundCount:     found.length,
+    expectedCount:  12,
+    missingIds:     missingIds,
+    unexpectedIds:  unexpectedIds,
+    records:        found
+  };
+}
+
+/**
+ * Targeted correction: writes corrected Date objects for the 12 BE-as-CE records.
+ * Aborts if any dry-run condition fails.
+ * Creates backup sheet before writing. Writes only col B of the 12 target rows.
+ * Does NOT touch RecordID, UpdatedAt, CreatedAt, or any other column.
+ */
+function fixBEGregorianDates() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return { success: false, message: 'ไม่สามารถล็อกได้ กรุณาลองใหม่ภายหลัง' };
+  try {
+    var ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet   = ss.getSheetByName(SHEET_NAME);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: 'ไม่มีข้อมูล' };
+
+    var numRows  = lastRow - 1;
+    var rawVals  = sheet.getRange(2, 1, numRows, 2).getValues(); // re-read inside lock
+    var dispVals = sheet.getRange(2, 2, numRows, 1).getDisplayValues();
+    var fmts     = sheet.getRange(2, 2, numRows, 1).getNumberFormats();
+
+    // Phase 1: validate — identical to dry-run logic
+    var targets = [];
+    for (var i = 0; i < numRows; i++) {
+      var cellVal = rawVals[i][1];
+      var isDate  = Object.prototype.toString.call(cellVal) === '[object Date]' && !isNaN(cellVal.getTime());
+      if (!isDate) continue;
+      var bkk  = Utilities.formatDate(cellVal, 'Asia/Bangkok', 'yyyy-MM-dd');
+      var year = parseInt(bkk.split('-')[0]);
+      if (year !== 2569) continue;
+      targets.push({ sheetRow: i+2, recordId: String(rawVals[i][0]), currentDate: bkk,
+                     dispVal: dispVals[i][0], fmt: fmts[i][0] });
+    }
+
+    if (targets.length !== 12) {
+      return { success: false, message: 'ABORT: expected 12, found ' + targets.length,
+               foundIds: targets.map(function(t) { return t.recordId; }) };
+    }
+    var foundIds    = targets.map(function(t) { return t.recordId; });
+    var missingIds  = BE_GREGORIAN_TARGET_IDS.filter(function(id) { return foundIds.indexOf(id) === -1; });
+    var unexpectedIds = foundIds.filter(function(id) { return BE_GREGORIAN_TARGET_IDS.indexOf(id) === -1; });
+    if (missingIds.length > 0 || unexpectedIds.length > 0) {
+      return { success: false, message: 'ABORT: RecordID mismatch', missingIds: missingIds, unexpectedIds: unexpectedIds };
+    }
+
+    // Phase 2: backup
+    var today      = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyyMMdd');
+    var backupName = 'FixBEGregorianBackup_' + today;
+    var oldBackup  = ss.getSheetByName(backupName);
+    if (oldBackup) ss.deleteSheet(oldBackup);
+    var backup     = ss.insertSheet(backupName);
+    var backupRows = [['SheetRow','RecordID','OriginalGregorianDate','OriginalDisplayValue','OriginalNumberFormat','CorrectedGregorianDate']];
+    targets.forEach(function(t) {
+      var parts = t.currentDate.split('-');
+      backupRows.push([t.sheetRow, t.recordId, t.currentDate, t.dispVal, t.fmt, '2026-' + parts[1] + '-' + parts[2]]);
+    });
+    backup.getRange(1, 1, backupRows.length, 6).setValues(backupRows);
+
+    // Phase 3: write corrected Date objects — col B only, target rows only
+    var corrected = [];
+    targets.forEach(function(t) {
+      var parts   = t.currentDate.split('-');
+      var month   = parseInt(parts[1]);
+      var day     = parseInt(parts[2]);
+      // UTC midnight: Bangkok is +7, so UTC 00:00 = Bangkok 07:00 same calendar date — no drift
+      var newDate = new Date(Date.UTC(2026, month - 1, day));
+      sheet.getRange(t.sheetRow, 2).setValue(newDate); // ONLY col B
+      corrected.push({ sheetRow: t.sheetRow, recordId: t.recordId,
+                       from: t.currentDate, to: '2026-' + parts[1] + '-' + parts[2] });
+    });
+    SpreadsheetApp.flush();
+
+    writeAuditLog({ action: 'FIX_BE_GREGORIAN_DATES', metadata: {
+      count: corrected.length, backupSheet: backupName,
+      recordIds: BE_GREGORIAN_TARGET_IDS
+    }});
+
+    return { success: true, correctedCount: corrected.length, backupSheet: backupName, corrected: corrected };
+  } finally {
+    lock.releaseLock();
+  }
 }
