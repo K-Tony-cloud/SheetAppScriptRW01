@@ -651,9 +651,8 @@ function getDashboardDataInternal() {
   var raw   = sheet.getDataRange().getDisplayValues();
   if (raw.length <= 1) return { total: 0, allData: [], attachmentCounts: {} };
   var rows = raw.slice(1)
-    .map(function(rowData, i) { return { sheetRow: i + 2, seqNo: 0, data: rowData }; })
+    .map(function(rowData, i) { return { sheetRow: i + 2, seqNo: i + 1, data: rowData }; })
     .filter(function(item) { return item.data[152] !== 'deleted'; })
-    .map(function(item, j) { item.seqNo = j + 1; return item; })
     .reverse();
   return {
     total:            rows.length,
@@ -668,7 +667,7 @@ function getBatchAttachmentCounts() {
   var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 9).getValues();
   var counts = {};
   vals.forEach(function(r) {
-    if (r[8] === 'deleted') return;
+    if (r[8] === 'deleted' || r[8] === 'record_deleted') return;
     var recId = String(r[1]);
     var sec   = r[2];
     if (!counts[recId]) counts[recId] = {
@@ -874,9 +873,9 @@ function softDeleteData(sheetRowNum, token) {
     sheet.getRange(sheetRowNum, SOFT_DEL_AT_COL).setValue(now);
     sheet.getRange(sheetRowNum, SOFT_DEL_BY_ID_COL).setValue(sess ? sess.userId : '');
     sheet.getRange(sheetRowNum, SOFT_DEL_BY_NAME_COL).setValue(sess ? sess.displayName : '');
-    cascadeSoftDeleteAttachments(recId);
+    var attCount = cascadeSoftDeleteAttachments(recId);
     try { CacheService.getScriptCache().remove('editlock_' + recId); } catch(ex) {}
-    writeAuditLog({ action: 'SOFT_DELETE_RECORD', token: token, recordId: recId, status: 'SUCCESS' });
+    writeAuditLog({ action: 'SOFT_DELETE_RECORD', token: token, recordId: recId, status: 'SUCCESS', metadata: { attachmentsSoftDeleted: attCount } });
     return { success: true, message: 'ย้ายข้อมูลไปถังขยะสำเร็จ!' };
   } catch(e) {
     return { success: false, message: 'เกิดข้อผิดพลาด: ' + e.toString() };
@@ -885,17 +884,21 @@ function softDeleteData(sheetRowNum, token) {
 
 function cascadeSoftDeleteAttachments(recordId) {
   var attSheet = getOrCreateAttachmentsSheet();
-  if (attSheet.getLastRow() <= 1) return;
+  if (attSheet.getLastRow() <= 1) return 0;
   var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues();
   var now  = new Date().toISOString();
+  var count = 0;
   for (var i = 0; i < vals.length; i++) {
-    if (String(vals[i][1]) === String(recordId) && vals[i][8] !== 'deleted') {
-      attSheet.getRange(i + 2, 9).setValue('deleted');
+    // Only mark 'active' attachments — skip user-deleted ('deleted') and already-record-deleted
+    if (String(vals[i][1]) === String(recordId) && vals[i][8] !== 'deleted' && vals[i][8] !== 'record_deleted') {
+      attSheet.getRange(i + 2, 9).setValue('record_deleted');
       attSheet.getRange(i + 2, 11).setValue(now);
       attSheet.getRange(i + 2, 12).setValue(now);
       // DriveApp.setTrashed() intentionally omitted — files preserved for restore
+      count++;
     }
   }
+  return count;
 }
 
 function listTrashRecords(token) {
@@ -920,6 +923,21 @@ function listTrashRecords(token) {
   return { success: true, records: records };
 }
 
+function cascadeRestoreAttachments(recordId) {
+  var attSheet = getOrCreateAttachmentsSheet();
+  if (attSheet.getLastRow() <= 1) return 0;
+  var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 9).getValues();
+  var count = 0;
+  for (var i = 0; i < vals.length; i++) {
+    // Only restore attachments marked by the soft-delete cascade; leave user-deleted alone
+    if (String(vals[i][1]) === String(recordId) && vals[i][8] === 'record_deleted') {
+      attSheet.getRange(i + 2, 9).setValue('active');
+      count++;
+    }
+  }
+  return count;
+}
+
 function restoreRecord(data, token) {
   if (!hasPermission(token, 'delete_record')) return { success: false, message: 'ไม่มีสิทธิ์' };
   var sheetRowNum = parseInt(data.sheetRow);
@@ -933,7 +951,8 @@ function restoreRecord(data, token) {
     sheet.getRange(sheetRowNum, SOFT_DEL_AT_COL).setValue('');
     sheet.getRange(sheetRowNum, SOFT_DEL_BY_ID_COL).setValue('');
     sheet.getRange(sheetRowNum, SOFT_DEL_BY_NAME_COL).setValue('');
-    writeAuditLog({ action: 'RESTORE_RECORD', token: token, recordId: recId, status: 'SUCCESS' });
+    var restored = cascadeRestoreAttachments(recId);
+    writeAuditLog({ action: 'RESTORE_RECORD', token: token, recordId: recId, status: 'SUCCESS', metadata: { attachmentsRestored: restored } });
     return { success: true, message: 'กู้คืนรายการสำเร็จ!' };
   } catch(e) {
     return { success: false, message: 'เกิดข้อผิดพลาด: ' + e.toString() };
@@ -1147,7 +1166,7 @@ function listAttachments(recordId, token) {
   var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues();
   var result = [];
   vals.forEach(function(r) {
-    if (String(r[1]) === String(recordId) && r[8] !== 'deleted') {
+    if (String(r[1]) === String(recordId) && r[8] !== 'deleted' && r[8] !== 'record_deleted') {
       result.push({
         attachmentId: r[0], recordId: r[1], section: r[2], driveFileId: r[3],
         fileName: r[4], mimeType: r[5], sizeBytes: r[6], sortOrder: r[7],
@@ -1167,7 +1186,7 @@ function getAttachmentData(attachmentId, token) {
   var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues();
   var att  = null;
   for (var i = 0; i < vals.length; i++) {
-    if (vals[i][0] === attachmentId && vals[i][8] !== 'deleted') { att = vals[i]; break; }
+    if (vals[i][0] === attachmentId && vals[i][8] !== 'deleted' && vals[i][8] !== 'record_deleted') { att = vals[i]; break; }
   }
   if (!att) return { success: false, message: 'ไม่พบ attachment: ' + attachmentId };
   try {
@@ -1217,7 +1236,7 @@ function listExportAttachments(data, token) {
   var vals = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, 12).getValues();
   vals.forEach(function(r) {
     if (String(r[1]) !== recordId) return;
-    if (String(r[8]) === 'deleted') return;
+    if (String(r[8]) === 'deleted' || String(r[8]) === 'record_deleted') return;
     var section = String(r[2]);
     if (!result[section]) result[section] = [];
     try {
