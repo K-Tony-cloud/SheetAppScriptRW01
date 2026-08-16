@@ -3369,6 +3369,78 @@
 
     // ==================== PERSON-CENTRIC ====================
 
+    // Central date parser for person-centric. Handles all legacy formats found in production.
+    // Returns {valid, timestamp, iso, display(DD/MM/BBBB), raw, calendar, formatType, fallbackUsed}
+    function normalizePersonDate(raw) {
+      var THAI_MONTHS = {
+        'มกราคม':1,'กุมภาพันธ์':2,'มีนาคม':3,'เมษายน':4,'พฤษภาคม':5,'มิถุนายน':6,
+        'กรกฎาคม':7,'สิงหาคม':8,'กันยายน':9,'ตุลาคม':10,'พฤศจิกายน':11,'ธันวาคม':12,
+        'ม.ค.':1,'ก.พ.':2,'มี.ค.':3,'เม.ย.':4,'พ.ค.':5,'มิ.ย.':6,
+        'ก.ค.':7,'ส.ค.':8,'ก.ย.':9,'ต.ค.':10,'พ.ย.':11,'ธ.ค.':12
+      };
+      // Full names first to avoid partial-match on abbreviations
+      var THAI_MONTH_KEYS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+        'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม',
+        'ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+      function pad(n) { return n < 10 ? '0'+n : ''+n; }
+      function isLeap(y) { return y%4===0 && (y%100!==0||y%400===0); }
+      function maxDay(y,m) { var d=[0,31,28,31,30,31,30,31,31,30,31,30,31]; return m===2&&isLeap(y)?29:d[m]; }
+      function valid(y,m,d) { return m>=1&&m<=12&&d>=1&&d<=maxDay(y,m)&&y>=1800&&y<=2200; }
+      function ceYear(y) { return y>=2400 ? y-543 : y; }
+      function build(yCE,m,d,calendar,formatType) {
+        if (!valid(yCE,m,d)) return null;
+        return { valid:true, timestamp:Date.UTC(yCE,m-1,d), iso:yCE+'-'+pad(m)+'-'+pad(d),
+          display:pad(d)+'/'+pad(m)+'/'+(yCE+543), raw:raw, calendar:calendar, formatType:formatType, fallbackUsed:false };
+      }
+      var INVALID = function(ft) { return {valid:false,timestamp:null,iso:null,display:null,raw:raw,calendar:null,formatType:ft,fallbackUsed:false}; };
+
+      if (raw === null || raw === undefined || raw === '') return INVALID('BLANK');
+      var s = String(raw).trim();
+      if (!s) return INVALID('BLANK');
+
+      var m; // regex match result
+
+      // Format 1: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS (Gregorian or Buddhist ISO-like)
+      m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) {
+        var y1=parseInt(m[1]),mo1=parseInt(m[2]),d1=parseInt(m[3]);
+        var r1=build(ceYear(y1),mo1,d1,y1>=2400?'BE':'CE','ISO');
+        return r1 || INVALID('INVALID_ISO');
+      }
+
+      // Format 2: DD/MM/YYYY or DD/MM/BBBB (Thai slash — day first, never ambiguous in this system)
+      m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (m) {
+        var d2=parseInt(m[1]),mo2=parseInt(m[2]),y2=parseInt(m[3]);
+        var r2=build(ceYear(y2),mo2,d2,y2>=2400?'BE':'CE','DD/MM/YYYY');
+        return r2 || INVALID('INVALID_DMY');
+      }
+
+      // Format 3: DD-MM-YYYY or DD-MM-BBBB (hyphen, day-first)
+      m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+      if (m) {
+        var d3=parseInt(m[1]),mo3=parseInt(m[2]),y3=parseInt(m[3]);
+        var r3=build(ceYear(y3),mo3,d3,y3>=2400?'BE':'CE','DD-MM-YYYY');
+        return r3 || INVALID('INVALID_DMY_HYPHEN');
+      }
+
+      // Format 4: Thai textual "3 เม.ย.2026" / "3 เมษายน 2026" / "3 เม.ย.2569"
+      for (var ki=0; ki<THAI_MONTH_KEYS.length; ki++) {
+        var mname=THAI_MONTH_KEYS[ki];
+        var idx=s.indexOf(mname);
+        if (idx===-1) continue;
+        var before=s.substring(0,idx).trim();
+        var after=s.substring(idx+mname.length).trim();
+        var d4=parseInt(before), y4=parseInt(after);
+        if (isNaN(d4)||isNaN(y4)||before.replace(/\d/g,'').length>0||y4<1000) continue;
+        var r4=build(ceYear(y4),THAI_MONTHS[mname],d4,y4>=2400?'BE':'CE','THAI_TEXT');
+        return r4 || INVALID('INVALID_THAI');
+      }
+
+      return INVALID('UNKNOWN');
+    }
+
     function normalizeIdCard(id) {
       return (id || '').replace(/[^0-9]/g, '');
     }
@@ -3390,36 +3462,63 @@
       var personMap = {};
       (globalData || []).forEach(function(item) {
         var normId = normalizeIdCard(item.data[6]);
-        if (!normId) return;
+        if (!normId || normId.length !== 13) return; // require exactly 13 digits
         if (!personMap[normId]) personMap[normId] = { normId: normId, records: [] };
         personMap[normId].records.push(item);
       });
       var repeats = Object.keys(personMap)
         .map(function(k) { return personMap[k]; })
         .filter(function(p) { return p.records.length >= 2; });
+
+      // Helper: find min/max timestamp from valid normalized dates in a record set
+      function getTs(recs, mode) { // mode='min'|'max'
+        var best = null;
+        recs.forEach(function(r) {
+          var t = normalizePersonDate(r.data[1]).timestamp;
+          if (t === null) return;
+          if (best === null || (mode==='min' ? t<best : t>best)) best = t;
+        });
+        return best;
+      }
+      function getRecByTs(recs, mode) {
+        var bestTs = null, bestRec = null;
+        recs.forEach(function(r) {
+          var t = normalizePersonDate(r.data[1]).timestamp;
+          if (t === null) return;
+          if (bestTs === null || (mode==='min' ? t<bestTs : t>bestTs)) { bestTs=t; bestRec=r; }
+        });
+        return bestRec;
+      }
+
       repeats.sort(function(a, b) {
         if (b.records.length !== a.records.length) return b.records.length - a.records.length;
-        var latestA = a.records.reduce(function(m,r){ return r.data[1]>m?r.data[1]:m; }, '');
-        var latestB = b.records.reduce(function(m,r){ return r.data[1]>m?r.data[1]:m; }, '');
-        return latestB.localeCompare(latestA);
+        var la=getTs(a.records,'max'), lb=getTs(b.records,'max');
+        if (lb!==null&&la!==null) return lb-la;
+        if (lb!==null) return 1;
+        if (la!==null) return -1;
+        return 0;
       });
+
       var el = document.getElementById('personListContent');
       if (!repeats.length) {
         el.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-users fa-2x mb-2 d-block"></i>ไม่พบบุคคลที่มามากกว่า 1 ครั้ง</div>';
         return;
       }
       var rows = repeats.map(function(p, idx) {
-        var sorted = p.records.slice().sort(function(a,b){ return b.data[1].localeCompare(a.data[1]) || b.data[2].localeCompare(a.data[2]); });
-        var latest = sorted[0], first = sorted[sorted.length-1];
-        var name = ((latest.data[3]||'') + ' ' + (latest.data[4]||'')).trim();
+        var nameRec = getRecByTs(p.records,'max') || p.records[0];
+        var name = ((nameRec.data[3]||'') + ' ' + (nameRec.data[4]||'')).trim();
+        var firstRec = getRecByTs(p.records,'min');
+        var latestRec = getRecByTs(p.records,'max');
+        var firstDisp  = firstRec  ? normalizePersonDate(firstRec.data[1]).display  : '-';
+        var latestDisp = latestRec ? normalizePersonDate(latestRec.data[1]).display : '-';
         return '<tr>' +
           '<td class="text-center small text-muted">' + (idx+1) + '</td>' +
           '<td>' + escHtml(name||'-') + '</td>' +
           '<td class="small font-monospace text-muted">' + maskIdCard(p.normId) + '</td>' +
           '<td class="text-center"><span class="badge bg-danger">' + p.records.length + '</span></td>' +
-          '<td class="small">' + escHtml(first.data[1]||'-') + '</td>' +
-          '<td class="small">' + escHtml(latest.data[1]||'-') + '</td>' +
-          '<td><button class="btn btn-sm btn-outline-primary py-0" onclick="viewPersonDetail(' + JSON.stringify(p.normId) + ')"><i class="fas fa-history"></i> ดูประวัติ</button></td>' +
+          '<td class="small">' + escHtml(firstDisp) + '</td>' +
+          '<td class="small">' + escHtml(latestDisp) + '</td>' +
+          '<td><button class="btn btn-sm btn-outline-primary py-0" onclick="viewPersonDetail(\'' + p.normId + '\')"><i class="fas fa-history"></i> ดูประวัติ</button></td>' +
           '</tr>';
       }).join('');
       el.innerHTML = '<p class="small text-muted mb-2">พบ <strong>' + repeats.length + '</strong> บุคคลที่มามากกว่า 1 ครั้ง</p>' +
@@ -3431,16 +3530,44 @@
     function viewPersonDetail(normId) {
       var records = (globalData||[]).filter(function(item){ return normalizeIdCard(item.data[6]) === normId; });
       if (!records.length) return;
-      var sorted = records.slice().sort(function(a,b){ return b.data[1].localeCompare(a.data[1]) || b.data[2].localeCompare(a.data[2]); });
-      var latest = sorted[0], first = sorted[sorted.length-1];
-      var name = ((latest.data[3]||'') + ' ' + (latest.data[4]||'')).trim();
-      var timelineRows = sorted.map(function(item, i) {
-        var d = item.data;
+
+      // Timeline sort: valid dates ascending (oldest→newest), invalid at end
+      var sorted = records.slice().sort(function(a,b) {
+        var ta=normalizePersonDate(a.data[1]).timestamp, tb=normalizePersonDate(b.data[1]).timestamp;
+        if (ta!==null&&tb!==null) { if (ta!==tb) return ta-tb; return (a.data[2]||'').localeCompare(b.data[2]||''); }
+        if (ta!==null) return -1;
+        if (tb!==null) return 1;
+        return 0;
+      });
+
+      // First/latest: only from records with valid normalized dates
+      var tsFirst=null, tsLatest=null, recFirst=null, recLatest=null;
+      records.forEach(function(r) {
+        var nd=normalizePersonDate(r.data[1]);
+        if (!nd.valid) return;
+        if (tsFirst===null||nd.timestamp<tsFirst) { tsFirst=nd.timestamp; recFirst=r; }
+        if (tsLatest===null||nd.timestamp>tsLatest) { tsLatest=nd.timestamp; recLatest=r; }
+      });
+      var nameRec = recLatest || sorted[sorted.length-1] || sorted[0];
+      var name = ((nameRec.data[3]||'') + ' ' + (nameRec.data[4]||'')).trim();
+      var firstDisp  = recFirst  ? normalizePersonDate(recFirst.data[1]).display  : '-';
+      var latestDisp = recLatest ? normalizePersonDate(recLatest.data[1]).display : '-';
+
+      var timelineRows = sorted.map(function(item) {
+        var d=item.data;
+        var nd=normalizePersonDate(d[1]);
+        var dateCell;
+        if (nd.valid) {
+          dateCell = escHtml(nd.display) + (d[2] ? '<br><span class="text-muted small">' + escHtml(d[2]) + '</span>' : '');
+        } else {
+          dateCell = '<span class="text-danger small">ไม่สามารถระบุวันที่ได้</span>' +
+            (d[1] ? '<br><small class="text-muted">' + escHtml(d[1]) + '</small>' : '');
+        }
         var warrant = d[41]==='มีหมายเสด็จ' ? '<span class="badge bg-warning text-dark small">มีหมาย</span>' : '<span class="badge bg-light text-muted border small">ไม่มีหมาย</span>';
         var caseType = (d[112]||'').toString().replace(/^'/, '') || '-';
         return '<tr>' +
-          '<td class="text-center small text-muted">' + (i+1) + '</td>' +
-          '<td class="small">' + escHtml(d[1]||'-') + '<br><span class="text-muted">' + escHtml(d[2]||'') + '</span></td>' +
+          '<td class="text-center small text-muted">' + item.seqNo + '</td>' +
+          '<td class="small">' + dateCell + '</td>' +
           '<td class="small">' + escHtml(caseType) + '</td>' +
           '<td class="small">' + warrant + '</td>' +
           '<td class="small">' + escHtml(d[43]||'-') + '</td>' +
@@ -3448,17 +3575,18 @@
           '<td><button class="btn btn-sm btn-outline-secondary py-0" onclick="viewPersonRecord(' + item.sheetRow + ')"><i class="fas fa-eye"></i></button></td>' +
           '</tr>';
       }).join('');
+
       document.getElementById('personDetailContent').innerHTML =
         '<div class="card border-success mb-3"><div class="card-body py-2">' +
         '<div class="fw-bold">' + escHtml(name||'-') + '</div>' +
         '<div class="small font-monospace text-muted">' + maskIdCard(normId) + '</div>' +
         '<div class="mt-1">' +
         '<span class="badge bg-danger me-2">' + records.length + ' ครั้ง</span>' +
-        '<span class="small text-muted">ครั้งแรก: ' + escHtml(first.data[1]||'-') + '</span>' +
-        '<span class="small text-muted ms-2">ล่าสุด: ' + escHtml(latest.data[1]||'-') + '</span>' +
+        '<span class="small text-muted">ครั้งแรก: ' + escHtml(firstDisp) + '</span>' +
+        '<span class="small text-muted ms-2">ล่าสุด: ' + escHtml(latestDisp) + '</span>' +
         '</div></div></div>' +
         '<div class="table-responsive"><table class="table table-sm table-hover align-middle">' +
-        '<thead class="table-light"><tr><th>#</th><th>วันที่/เวลา</th><th>ประเภทคดี</th><th>หมายฯ</th><th>สถานที่</th><th>เจ้าหน้าที่</th><th></th></tr></thead>' +
+        '<thead class="table-light"><tr><th>seqNo</th><th>วันที่/เวลา</th><th>ประเภทคดี</th><th>หมายฯ</th><th>สถานที่</th><th>เจ้าหน้าที่</th><th></th></tr></thead>' +
         '<tbody>' + timelineRows + '</tbody></table></div>';
       document.getElementById('personListView').classList.add('d-none');
       document.getElementById('personDetailView').classList.remove('d-none');
