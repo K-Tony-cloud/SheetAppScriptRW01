@@ -144,6 +144,10 @@ function doPost(e) {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = standardizeEventDateFormat();
     }
+    else if (action === 'auditAddress') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = auditAddressData();
+    }
     // Maintenance routes — disabled after date system closure
     else if (action === 'previewNormalize' || action === 'migrateEventDates' ||
              action === 'colBFormats'      || action === 'auditColBYears'     ||
@@ -996,15 +1000,15 @@ function buildDataRow(recordId, f, existingVals) {
   return [
     recordId,
     isoStringToSheetDate(col('col2')),  col('col3'),  col('col4'),  col('col5'),
-    col('col6'),  col('col7'),  col('col8'),  col('col9'),
+    col('col6'),  col('col7'),  col('col8', 7),  col('col9'),
     col('col10'), col('col11'), col('col12'), col('col13'),
     col('col14'), col('col15'), col('col16'), col('col17'),
     col('col18'), col('col19'), col('col20'), col('col21'),
-    col('col22'), col('col23'), col('col24'), col('col25'),
+    col('col22'), col('col23', 22), col('col24'), col('col25'),
     col('col26'), col('col27'), col('col28'), col('col29'),
     col('col30'), col('col31'), col('col32'), col('col33'),
     col('col34'), col('col35'), col('col36'), col('col37'),
-    col('col38'), col('col39'), col('col40'), col('col41'),
+    col('col38', 37), col('col39'), col('col40'), col('col41'),
     col('col42', 41), col('col43', 42), col('col44', 43), col('col45', 44),
     col('col46', 45), col('col47', 46), col('col48', 47), col('col49', 48),
     col('col50', 49), col('col51', 50), col('col52', 51), col('col53', 52),
@@ -2608,5 +2612,144 @@ function standardizeEventDateFormat() {
     yearDistribution:  yearCounts,
     suspiciousCount:   suspicious,
     spotlightRecords:  spotlight
+  };
+}
+
+// ===== ADDRESS AUDIT =====
+
+/**
+ * READ-ONLY: audits legacy vs structured address data across all 419 records.
+ * Reports counts, samples (RecordID + masked address text), and parse feasibility.
+ * No writes of any kind.
+ */
+function auditAddressData() {
+  var ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet   = ss.getSheetByName(SHEET_NAME);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: true, total: 0 };
+
+  var numRows = lastRow - 1;
+  // Read col A through col 93 (indices 0–92)
+  var data = sheet.getRange(2, 1, numRows, 93).getValues();
+
+  // Index constants (0-based)
+  var IDX_REC  = 0;   // col1 = RecordID
+  var IDX_LC   = 7;   // col8 = legacy current address text
+  var IDX_LD   = 37;  // col38 = legacy domicile text
+  var IDX_LB   = 22;  // col23 = legacy Bangkok stay text
+
+  // Structured field indices
+  var SC = [63,64,65,66,67,68,69,70]; // current address col64-71
+  var SD = [71,72,73,74,75,76,77,78]; // domicile col72-79
+  var SB = [84,85,86,87,88,89,90,91,92]; // Bangkok stay col85-93 (84=status)
+  var SI = [38,39,40,79,80,81,82,83];   // incident: col39-41 (province/district/sub) + col80-84
+
+  function g(row, idx) { return (row[idx] || '').toString().trim(); }
+  function hasAny(row, idxArr) {
+    return idxArr.some(function(i) { return g(row, i) !== ''; });
+  }
+  function classify(text) {
+    if (!text) return null;
+    var t = text;
+    var negativeExact = ['ไม่มี','ไม่ทราบ','ไม่ระบุ','-','N/A','na','none'];
+    if (negativeExact.indexOf(t.toLowerCase()) !== -1) return 'UNPARSEABLE';
+    if (t.length < 4) return 'UNPARSEABLE';
+    // Strong structural keywords → can split into named fields
+    var strong = ['ซอย','ถนน','ตำบล','อำเภอ','จังหวัด','แขวง','เขต','บ้านเลขที่',
+                  ' ต.',' อ.',' จ.',' ม.',' ซ.',' ถ.'];
+    if (strong.some(function(k){ return t.indexOf(k) !== -1; })) return 'AUTO_HIGH_CONFIDENCE';
+    // Province name or abbreviation present → partial
+    var provs = ['กรุงเทพ','กทม.','กทม','นนทบุรี','ปทุมธานี','สมุทร','ชลบุรี','ระยอง','ฉะเชิงเทรา',
+                 'เชียงใหม่','เชียงราย','ลำปาง','ลำพูน','แม่ฮ่องสอน','พะเยา','แพร่','น่าน',
+                 'อุตรดิตถ์','ตาก','สุโขทัย','กำแพงเพชร','พิษณุโลก','พิจิตร','เพชรบูรณ์',
+                 'นครสวรรค์','อุทัยธานี','ขอนแก่น','อุดรธานี','หนองคาย','นครพนม','สกลนคร',
+                 'มุกดาหาร','กาฬสินธุ์','ร้อยเอ็ด','มหาสารคาม','อุบลราชธานี','ยโสธร',
+                 'ศรีสะเกษ','สุรินทร์','บุรีรัมย์','นครราชสีมา','ชัยภูมิ','เลย',
+                 'สงขลา','สตูล','ตรัง','พัทลุง','นครศรีธรรมราช','สุราษฎร์','ชุมพร',
+                 'ระนอง','กระบี่','ภูเก็ต','พังงา','ยะลา','ปัตตานี','นราธิวาส',
+                 'อยุธยา','อ่างทอง','ลพบุรี','สิงห์บุรี','ชัยนาท','สระบุรี',
+                 'นครปฐม','สุพรรณบุรี','ราชบุรี','กาญจนบุรี','เพชรบุรี','ประจวบ'];
+    if (provs.some(function(p){ return t.indexOf(p) !== -1; })) return 'PARTIAL';
+    // Has digits (house number) or slash → PARTIAL
+    if (/\d/.test(t) || t.indexOf('/') !== -1) return 'PARTIAL';
+    // Short text, no keywords
+    return 'UNPARSEABLE';
+  }
+
+  // Counters per group
+  function mkGroup() { return { legacyOnly:0, structuredOnly:0, both:0, neither:0, samples:[] }; }
+  var curr = mkGroup(), dom = mkGroup(), bkk = mkGroup();
+  var inc  = { structuredOnly:0, neither:0 };
+  var parseEst = { AUTO_HIGH_CONFIDENCE:0, PARTIAL:0, UNPARSEABLE:0 };
+  var legSamples = [];   // RecordID + preview of legacy current address
+
+  for (var i = 0; i < numRows; i++) {
+    var row   = data[i];
+    var recId = g(row, IDX_REC);
+
+    var lc = g(row, IDX_LC); // legacy current address
+    var ld = g(row, IDX_LD); // legacy domicile
+    var lb = g(row, IDX_LB); // legacy Bangkok stay
+    var sc = hasAny(row, SC);
+    var sd = hasAny(row, SD);
+    var sb = hasAny(row, SB);
+    var si = hasAny(row, SI);
+
+    // Current address
+    if (lc && sc)        curr.both++;
+    else if (lc && !sc)  curr.legacyOnly++;
+    else if (!lc && sc)  curr.structuredOnly++;
+    else                 curr.neither++;
+    if (curr.samples.length < 25 && lc && !sc)
+      curr.samples.push({ recordId: recId, legacy: lc.substring(0, 120) });
+
+    // Domicile
+    if (ld && sd)        dom.both++;
+    else if (ld && !sd)  dom.legacyOnly++;
+    else if (!ld && sd)  dom.structuredOnly++;
+    else                 dom.neither++;
+    if (dom.samples.length < 25 && ld && !sd)
+      dom.samples.push({ recordId: recId, legacy: ld.substring(0, 120) });
+
+    // Bangkok stay
+    if (lb && sb)        bkk.both++;
+    else if (lb && !sb)  bkk.legacyOnly++;
+    else if (!lb && sb)  bkk.structuredOnly++;
+    else                 bkk.neither++;
+    if (bkk.samples.length < 25 && lb && !sb)
+      bkk.samples.push({ recordId: recId, legacy: lb.substring(0, 120) });
+
+    // Incident (no legacy column)
+    if (si) inc.structuredOnly++; else inc.neither++;
+
+    // Parse estimate for legacy current address
+    if (lc) {
+      var cls = classify(lc);
+      if (cls) parseEst[cls]++;
+      if (legSamples.length < 20)
+        legSamples.push({ recordId: recId, text: lc.substring(0, 100), parseClass: cls });
+    }
+  }
+
+  // Also collect domicile parse estimate
+  var parseDom = { AUTO_HIGH_CONFIDENCE:0, PARTIAL:0, UNPARSEABLE:0 };
+  for (var j = 0; j < numRows; j++) {
+    var ld2 = g(data[j], IDX_LD);
+    if (ld2) { var cls2 = classify(ld2); if (cls2) parseDom[cls2]++; }
+  }
+  var parseBkk = { AUTO_HIGH_CONFIDENCE:0, PARTIAL:0, UNPARSEABLE:0 };
+  for (var k = 0; k < numRows; k++) {
+    var lb2 = g(data[k], IDX_LB);
+    if (lb2) { var cls3 = classify(lb2); if (cls3) parseBkk[cls3]++; }
+  }
+
+  return {
+    success: true,
+    total:   numRows,
+    currentAddress:  { counts: { legacyOnly: curr.legacyOnly, structuredOnly: curr.structuredOnly, both: curr.both, neither: curr.neither }, parseEstimate: parseEst,  samples: curr.samples },
+    domicile:        { counts: { legacyOnly: dom.legacyOnly,  structuredOnly: dom.structuredOnly,  both: dom.both,  neither: dom.neither  }, parseEstimate: parseDom, samples: dom.samples  },
+    bangkokStay:     { counts: { legacyOnly: bkk.legacyOnly,  structuredOnly: bkk.structuredOnly,  both: bkk.both,  neither: bkk.neither  }, parseEstimate: parseBkk, samples: bkk.samples  },
+    incidentAddress: { structuredOnly: inc.structuredOnly, neither: inc.neither },
+    legacyCurrentSamples: legSamples
   };
 }
