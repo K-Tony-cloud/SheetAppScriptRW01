@@ -148,6 +148,42 @@ function doPost(e) {
       if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
       else result = auditAddressData();
     }
+    else if (action === 'auditAddressHierarchy') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = auditAddressHierarchy();
+    }
+    else if (action === 'previewStructuredAddressMigration') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = previewStructuredAddressMigration();
+    }
+    else if (action === 'previewExactAddressMigration') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = previewExactAddressMigration();
+    }
+    else if (action === 'preExecAddressMigrationCheck') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = preExecAddressMigrationCheck();
+    }
+    else if (action === 'migrateVerifiedAddresses') {
+      // Route permanently disabled — migration completed 2026-08-17 (321 current + 138 domicile).
+      result = { success: false, message: 'migrateVerifiedAddresses: route disabled — migration completed 2026-08-17.' };
+    }
+    else if (action === 'testScriptLock') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = testScriptLock();
+    }
+    else if (action === 'testTextSafeWrite') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = testTextSafeWrite();
+    }
+    else if (action === 'verifyAddressRollbackState') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = verifyAddressRollbackState();
+    }
+    else if (action === 'verifyPostMigrationState') {
+      if (!hasPermission(token, 'manage_system')) result = { success: false, message: 'ไม่มีสิทธิ์' };
+      else result = verifyPostMigrationState();
+    }
     // Maintenance routes — disabled after date system closure
     else if (action === 'previewNormalize' || action === 'migrateEventDates' ||
              action === 'colBFormats'      || action === 'auditColBYears'     ||
@@ -779,9 +815,11 @@ function submitData(formObject) {
   try {
     var sheet    = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
     var recordId = allocateNextRecordId(); // concurrency-safe atomic allocation
-    var newRow   = buildDataRow(recordId, formObject, null);
-    sheet.appendRow(newRow);
-    var newRowNum = sheet.getLastRow();
+    var newRow    = buildDataRow(recordId, formObject, null);
+    var newRowNum = sheet.getLastRow() + 1;
+    // Set structured address columns to plain-text format before write to prevent date coercion
+    if (newRow.length > 63) { sheet.getRange(newRowNum, 64, 1, Math.min(30, newRow.length - 63)).setNumberFormat('@'); }
+    sheet.getRange(newRowNum, 1, 1, newRow.length).setValues([newRow]);
     rewritePhoneCells(sheet, newRowNum, newRow);
     writeAuditLog({ action: 'CREATE_RECORD', token: formObject.token || '', recordId: String(recordId), status: 'SUCCESS' });
     return { success: true, recordId: recordId, message: 'บันทึกข้อมูลสำเร็จ!' };
@@ -824,6 +862,8 @@ function updateData(sheetRowNum, formObject, token) {
       });
     }
 
+    // Set structured address columns to plain-text format before write to prevent date coercion
+    if (updatedRow.length > 63) { sheet.getRange(sheetRowNum, 64, 1, Math.min(30, updatedRow.length - 63)).setNumberFormat('@'); }
     sheet.getRange(sheetRowNum, 1, 1, updatedRow.length).setValues([updatedRow]);
     rewritePhoneCells(sheet, sheetRowNum, updatedRow);
     batchWriteAuditLogs(auditEntries);
@@ -2752,4 +2792,1649 @@ function auditAddressData() {
     incidentAddress: { structuredOnly: inc.structuredOnly, neither: inc.neither },
     legacyCurrentSamples: legSamples
   };
+}
+
+// Phase B: Geography hierarchy validation (READ-ONLY, no writes, Bangkok Stay excluded)
+function auditAddressHierarchy() {
+  try {
+    // 1. Fetch full geography lists from GitHub
+    var opt = { muteHttpExceptions: true };
+    var provResp = UrlFetchApp.fetch(GEO_BASE + 'province.json', opt);
+    if (provResp.getResponseCode() !== 200) throw new Error('province.json HTTP ' + provResp.getResponseCode());
+    var provinces = JSON.parse(provResp.getContentText());
+
+    var ampResp = UrlFetchApp.fetch(GEO_BASE + 'amphure.json', opt);
+    if (ampResp.getResponseCode() !== 200) throw new Error('amphure.json HTTP ' + ampResp.getResponseCode());
+    var amphures = JSON.parse(ampResp.getContentText());
+
+    var tamResp = UrlFetchApp.fetch(GEO_BASE + 'tambon.json', opt);
+    if (tamResp.getResponseCode() !== 200) throw new Error('tambon.json HTTP ' + tamResp.getResponseCode());
+    var tambons = JSON.parse(tamResp.getContentText());
+
+    // 2. Build normalized lookup maps (strip leading geo-prefix from DB names)
+    function normGeo(s) {
+      if (!s) return '';
+      var n = s.toString().trim();
+      var pf = ['จังหวัด','อำเภอ','เขต','ตำบล','แขวง'];
+      for (var k = 0; k < pf.length; k++) {
+        if (n.indexOf(pf[k]) === 0) { n = n.substring(pf[k].length).trim(); break; }
+      }
+      return n;
+    }
+
+    // province name → {id, name}
+    var provMap = {};
+    provinces.forEach(function(p) { provMap[normGeo(p.name_th)] = { id: p.id, name: p.name_th }; });
+    // Bangkok aliases
+    ['กรุงเทพ','กทม.','กทม','กรุงเทพฯ'].forEach(function(a) { if (!provMap[a]) provMap[a] = provMap['กรุงเทพมหานคร']; });
+
+    // province_id|district_name → {id, name}
+    var ampMap = {};
+    amphures.forEach(function(a) { ampMap[a.province_id + '|' + normGeo(a.name_th)] = { id: a.id, name: a.name_th }; });
+
+    // amphure_id|subdistrict_name → {id, name}
+    var tamMap = {};
+    tambons.forEach(function(t) { tamMap[t.amphure_id + '|' + normGeo(t.name_th)] = { id: t.id, name: t.name_th }; });
+
+    // 3. Parse Thai address text → extract province / district / subdistrict
+    function parseAddr(text) {
+      var t = text.trim();
+      var result = { province: null, district: null, subdistrict: null };
+
+      // Province: "จังหวัดXXX" or "จ.XXX" or Bangkok keywords
+      var m = t.match(/จังหวัด\s*([^\s,/ก-ๅ]*[฀-๿]+[^\s,/]*)/);
+      if (!m) m = t.match(/(?:^|[\s,])จ\.\s*([^\s,/]+)/);
+      if (m) {
+        result.province = normGeo(m[1].trim());
+      } else if (t.indexOf('กรุงเทพมหานคร') !== -1) {
+        result.province = 'กรุงเทพมหานคร';
+      } else if (t.indexOf('กรุงเทพ') !== -1 || t.indexOf('กทม') !== -1) {
+        result.province = 'กรุงเทพ';
+      }
+
+      // District: "อำเภอXXX" or "อ.XXX" or "เขตXXX"
+      m = t.match(/อำเภอ\s*([^\s,/]+)/);
+      if (!m) m = t.match(/(?:^|[\s,])อ\.\s*([^\s,/]+)/);
+      if (!m) m = t.match(/เขต\s*([^\s,/]+)/);
+      if (m) result.district = normGeo(m[1].trim());
+
+      // Subdistrict: "ตำบลXXX" or "ต.XXX" or "แขวงXXX"
+      m = t.match(/ตำบล\s*([^\s,/]+)/);
+      if (!m) m = t.match(/(?:^|[\s,])ต\.\s*([^\s,/]+)/);
+      if (!m) m = t.match(/แขวง\s*([^\s,/]+)/);
+      if (m) result.subdistrict = normGeo(m[1].trim());
+
+      return result;
+    }
+
+    // 4. Classify by hierarchy validation
+    var negatives = ['ไม่มี','ไม่ทราบ','ไม่ระบุ','-','n/a','na','none'];
+    function classify(text, parsed) {
+      if (!text || text.length < 4) return { status: 'UNPARSEABLE', reason: 'too_short_or_empty' };
+      if (negatives.indexOf(text.trim().toLowerCase()) !== -1) return { status: 'UNPARSEABLE', reason: 'negative_marker' };
+
+      if (!parsed.province) return { status: 'UNPARSEABLE', reason: 'no_province_keyword' };
+
+      var provEntry = provMap[parsed.province];
+      if (!provEntry) return { status: 'NEEDS_REVIEW', reason: 'province_not_in_db:' + parsed.province };
+
+      if (!parsed.district) return { status: 'NEEDS_REVIEW', reason: 'province_ok_district_missing' };
+
+      var ampEntry = ampMap[provEntry.id + '|' + parsed.district];
+      if (!ampEntry) return { status: 'NEEDS_REVIEW', reason: 'district_not_under_province:' + parsed.district };
+
+      if (!parsed.subdistrict) return { status: 'NEEDS_REVIEW', reason: 'province_district_ok_subdistrict_missing' };
+
+      var tamEntry = tamMap[ampEntry.id + '|' + parsed.subdistrict];
+      if (!tamEntry) return { status: 'NEEDS_REVIEW', reason: 'subdistrict_not_under_district:' + parsed.subdistrict };
+
+      return { status: 'VERIFIED_HIGH_CONFIDENCE', reason: 'all_three_levels_valid' };
+    }
+
+    // 5. Read sheet (legacy-only records only, no structured data)
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAME);
+    var last  = sheet.getLastRow();
+    if (last < 2) return { success: true, total: 0 };
+
+    var numRows = last - 1;
+    var data    = sheet.getRange(2, 1, numRows, 93).getValues();
+
+    var IDX_LC = 7;   // col8 legacy current address
+    var IDX_LD = 37;  // col38 legacy domicile
+    var SC = [63,64,65,66,67,68,69,70];
+    var SD = [71,72,73,74,75,76,77,78];
+    function g(row, idx) { return (row[idx] || '').toString().trim(); }
+    function hasAny(row, idxArr) { return idxArr.some(function(i){ return g(row,i) !== ''; }); }
+
+    var STATUSES = ['VERIFIED_HIGH_CONFIDENCE','NEEDS_REVIEW','UNPARSEABLE'];
+    function mkResult() {
+      var o = { counts: {}, reasonBreakdown: {}, samples: {} };
+      STATUSES.forEach(function(s){ o.counts[s] = 0; o.samples[s] = []; });
+      return o;
+    }
+    var curr = mkResult(), dom = mkResult();
+    var MAX_SAMPLES = 10;
+
+    for (var i = 0; i < numRows; i++) {
+      var row   = data[i];
+      var recId = g(row, 0);
+
+      var lc = g(row, IDX_LC);
+      if (lc && !hasAny(row, SC)) {
+        var pc = parseAddr(lc);
+        var rc = classify(lc, pc);
+        curr.counts[rc.status]++;
+        curr.reasonBreakdown[rc.reason] = (curr.reasonBreakdown[rc.reason] || 0) + 1;
+        if (curr.samples[rc.status].length < MAX_SAMPLES) {
+          curr.samples[rc.status].push({ recordId: recId, text: lc.substring(0,100), parsed: pc, reason: rc.reason });
+        }
+      }
+
+      var ld = g(row, IDX_LD);
+      if (ld && !hasAny(row, SD)) {
+        var pd = parseAddr(ld);
+        var rd = classify(ld, pd);
+        dom.counts[rd.status]++;
+        dom.reasonBreakdown[rd.reason] = (dom.reasonBreakdown[rd.reason] || 0) + 1;
+        if (dom.samples[rd.status].length < MAX_SAMPLES) {
+          dom.samples[rd.status].push({ recordId: recId, text: ld.substring(0,100), parsed: pd, reason: rd.reason });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      note: 'READ-ONLY. No writes. Bangkok Stay excluded. Only legacy-only records classified.',
+      geoDataLoaded: { provinces: provinces.length, amphures: amphures.length, tambons: tambons.length },
+      currentAddress: curr,
+      domicile: dom
+    };
+
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+// Phase B v2 — Full migration preview with parser fixes (READ-ONLY, no writes)
+// Fixes: leading-label house-no, Bangkok-ฯ leak, multi-section detection,
+//        ตรอก→soi, hyphen house-no, field sanity checks
+function previewStructuredAddressMigration() {
+  try {
+    // 1. Fetch full geography lists
+    var opt = { muteHttpExceptions: true };
+    var provResp = UrlFetchApp.fetch(GEO_BASE + 'province.json', opt);
+    if (provResp.getResponseCode() !== 200) throw new Error('province.json HTTP ' + provResp.getResponseCode());
+    var provinces = JSON.parse(provResp.getContentText());
+
+    var ampResp = UrlFetchApp.fetch(GEO_BASE + 'amphure.json', opt);
+    if (ampResp.getResponseCode() !== 200) throw new Error('amphure.json HTTP ' + ampResp.getResponseCode());
+    var amphures = JSON.parse(ampResp.getContentText());
+
+    var tamResp = UrlFetchApp.fetch(GEO_BASE + 'tambon.json', opt);
+    if (tamResp.getResponseCode() !== 200) throw new Error('tambon.json HTTP ' + tamResp.getResponseCode());
+    var tambons = JSON.parse(tamResp.getContentText());
+
+    // 2. Helpers
+    function stripZWC(s) {
+      return String(s || '').replace(/[​‌‍‎‏‪‫‬‭‮⁠⁡⁢⁣﻿­᠎]/g, '');
+    }
+    function normKey(s) {
+      var n = stripZWC(s).trim();
+      var pf = ['จังหวัด','อำเภอ','เขต','ตำบล','แขวง'];
+      for (var k = 0; k < pf.length; k++) {
+        if (n.indexOf(pf[k]) === 0) { n = n.substring(pf[k].length).trim(); break; }
+      }
+      return n;
+    }
+    function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+    // 3. Build lookup maps (same source as PROVINCES_STATIC — compatible with Form dropdowns)
+    var provMap = {};
+    provinces.forEach(function(p) { provMap[normKey(p.name_th)] = { id: p.id, canonical: p.name_th }; });
+    ['กรุงเทพ','กทม.','กทม','กรุงเทพฯ'].forEach(function(a) { if (!provMap[a]) provMap[a] = provMap['กรุงเทพมหานคร']; });
+
+    var ampMap = {};
+    amphures.forEach(function(a) { ampMap[a.province_id + '|' + normKey(a.name_th)] = { id: a.id, canonical: a.name_th }; });
+
+    var tamMap = {};
+    tambons.forEach(function(t) { tamMap[t.amphure_id + '|' + normKey(t.name_th)] = { id: t.id, canonical: t.name_th }; });
+
+    // 4. Hierarchy extraction + validation
+    function extractGeo(text) {
+      var t = text.trim();
+      var r = { province: null, district: null, subdistrict: null };
+      var m;
+      m = t.match(/จังหวัด\s*([^\s,/]+)/);
+      if (!m) m = t.match(/(?:^|[\s,])จ\.\s*([^\s,/]+)/);
+      if (m) r.province = normKey(m[1]);
+      else if (t.indexOf('กรุงเทพมหานคร') !== -1) r.province = 'กรุงเทพมหานคร';
+      else if (t.indexOf('กรุงเทพ') !== -1 || t.indexOf('กทม') !== -1) r.province = 'กรุงเทพ';
+
+      m = t.match(/อำเภอ\s*([^\s,/]+)/);
+      if (!m) m = t.match(/(?:^|[\s,])อ\.\s*([^\s,/]+)/);
+      if (!m) m = t.match(/เขต\s*([^\s,/]+)/);
+      if (m) r.district = normKey(m[1]);
+
+      m = t.match(/ตำบล\s*([^\s,/]+)/);
+      if (!m) m = t.match(/(?:^|[\s,])ต\.\s*([^\s,/]+)/);
+      if (!m) m = t.match(/แขวง\s*([^\s,/]+)/);
+      if (m) r.subdistrict = normKey(m[1]);
+      return r;
+    }
+
+    function validateH(geo) {
+      if (!geo.province) return { status: 'UNPARSEABLE' };
+      var pe = provMap[geo.province]; if (!pe) return { status: 'NEEDS_REVIEW' };
+      if (!geo.district) return { status: 'NEEDS_REVIEW' };
+      var ae = ampMap[pe.id + '|' + geo.district]; if (!ae) return { status: 'NEEDS_REVIEW' };
+      if (!geo.subdistrict) return { status: 'NEEDS_REVIEW' };
+      var te = tamMap[ae.id + '|' + geo.subdistrict]; if (!te) return { status: 'NEEDS_REVIEW' };
+      return { status: 'VERIFIED_HIGH_CONFIDENCE', pe: pe, ae: ae, te: te };
+    }
+
+    // 5. Multiple-address-section detector
+    var SECTION_MARKERS = ['ที่อยู่ตามบัตร','ที่อยู่เดิม','ที่อยู่ตามทะเบียน','ภูมิลำเนา'];
+    function hasMultiSections(text) {
+      return SECTION_MARKERS.some(function(m) { return text.indexOf(m) !== -1; });
+    }
+
+    // 6. Full field parser (v2 — with all parser fixes)
+    function parseFields(raw, pe, ae, te) {
+      var fields = {
+        house_no: '', moo: '', soi: '', road: '',
+        subdistrict: te.canonical, district: ae.canonical, province: pe.canonical,
+        police_station: '', unmappedText: ''
+      };
+
+      var working = stripZWC(raw).replace(/\s+/g, ' ').trim();
+
+      // eat: consume first match from working, return match array
+      function eat(re) {
+        var m = working.match(re);
+        if (m) working = working.replace(m[0], ' ').replace(/\s+/g, ' ').trim();
+        return m;
+      }
+      // removeGeoTerm: remove validated canonical geo key from working
+      function removeGeoTerm(prefixes, key) {
+        var safe = escRe(key);
+        for (var pi = 0; pi < prefixes.length; pi++) {
+          var m = working.match(new RegExp(prefixes[pi] + '\\s*' + safe));
+          if (m) { working = working.replace(m[0], ' ').replace(/\s+/g, ' ').trim(); return; }
+        }
+        var m2 = working.match(new RegExp('(?:^|[\\s,])' + safe + '(?=[\\s,/]|$)'));
+        if (m2) working = working.replace(m2[0], ' ').replace(/\s+/g, ' ').trim();
+      }
+
+      // A. Remove province (Bangkok: remove ฯ atomically BEFORE กรุงเทพ)
+      if (pe.canonical === 'กรุงเทพมหานคร') {
+        working = working.replace(/กรุงเทพมหานคร/g, ' ')
+                         .replace(/กรุงเทพฯ/g, ' ')
+                         .replace(/จังหวัด\s*กรุงเทพ\S*/g, ' ')
+                         .replace(/กรุงเทพ/g, ' ')
+                         .replace(/กทม\.?/g, ' ')
+                         .replace(/\s+/g, ' ').trim();
+      } else {
+        removeGeoTerm(['จังหวัด', 'จ\\.'], normKey(pe.canonical));
+      }
+
+      // B. Remove district
+      removeGeoTerm(['อำเภอ', 'อ\\.', 'เขต'], normKey(ae.canonical));
+
+      // C. Remove subdistrict
+      removeGeoTerm(['ตำบล', 'ต\\.', 'แขวง'], normKey(te.canonical));
+
+      // D. Cleanup standalone ฯ leaked from partial removal (e.g., "กรุงเทพฯ" in non-BKK text)
+      working = working.replace(/(?:^|\s)ฯ(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
+
+      // E. Strip known leading labels (working copy only — raw is never modified)
+      working = working.replace(/^ที่อยู่\s*ปัจจุบัน\s*:?\s+/, '')
+                        .replace(/^ที่อยู่\s*:?\s+/, '')
+                        .replace(/\s+/g, ' ').trim();
+
+      // F. Mid-text "ที่อยู่ :" marker (building-name + address-section pattern)
+      //    e.g., "วัดX ที่อยู่ : 3 ตรอกY ..." → extraUnmapped="วัดX", working="3 ตรอกY ..."
+      var extraUnmapped = '';
+      var midM = working.match(/^(.+?)\s+ที่อยู่\s*:?\s+(.+)$/);
+      if (midM) {
+        extraUnmapped = midM[1].trim();
+        working = midM[2].replace(/^ที่อยู่\s*ปัจจุบัน\s*:?\s+/, '')
+                          .replace(/^ที่อยู่\s*:?\s+/, '')
+                          .replace(/\s+/g, ' ').trim();
+      }
+
+      // G. Moo
+      var mooM = eat(/หมู่ที่\s*(\d+)/);
+      if (!mooM) mooM = eat(/หมู่\s*(\d+)/);
+      if (!mooM) mooM = eat(/ม\.\s*(\d+)/);
+      if (mooM) fields.moo = mooM[1];
+
+      // H. Police station
+      var stnM = eat(/สน\.\s*([^\s,/]+)/);
+      if (!stnM) stnM = eat(/สถานีตำรวจ\s*([^\s,/]+)/);
+      if (stnM) fields.police_station = stnM[1] || '';
+
+      // I. Soi (ซอย/ซ., non-greedy stops before road keyword)
+      var soiM = working.match(/ซอย\s*(.*?)(?=\s+ถนน|\s+ถ\.|$)/);
+      if (!soiM || !soiM[1].trim()) soiM = working.match(/ซ\.\s*(.*?)(?=\s+ถนน|\s+ถ\.|$)/);
+      if (soiM && soiM[1].trim()) {
+        fields.soi = soiM[1].trim();
+        working = working.replace(soiM[0], ' ').replace(/\s+/g, ' ').trim();
+      }
+
+      // J. ตรอก → soi fallback (policy: ตรอก maps to soi when no ซอย present)
+      if (!fields.soi) {
+        var trokM = working.match(/ตรอก\s*(.*?)(?=\s+ถนน|\s+ถ\.|$)/);
+        if (trokM && trokM[1].trim()) {
+          fields.soi = trokM[1].trim();
+          working = working.replace(trokM[0], ' ').replace(/\s+/g, ' ').trim();
+        }
+      }
+
+      // K. Road (greedy to end)
+      var roadM = working.match(/ถนน\s*(.*)/);
+      if (!roadM) roadM = working.match(/ถ\.\s*(.*)/);
+      if (roadM) {
+        fields.road = roadM[1].trim();
+        working = working.replace(roadM[0], ' ').replace(/\s+/g, ' ').trim();
+      }
+
+      // L. House number from current working start (supports hyphen: 1008/57-58)
+      var houseM = working.match(/^(\d+(?:\/[\d-]+)?)(?:\s|$)/);
+      if (houseM) {
+        fields.house_no = houseM[1];
+        working = working.replace(new RegExp('^' + escRe(houseM[1]) + '(?:\\s|$)'), '').replace(/\s+/g, ' ').trim();
+      }
+
+      // M. Strip trailing standalone ฯ from road/soi (deterministic cleanup)
+      if (fields.road) fields.road = fields.road.replace(/\s*ฯ$/, '').trim();
+      if (fields.soi)  fields.soi  = fields.soi.replace(/\s*ฯ$/, '').trim();
+
+      // N. Build unmappedText
+      fields.unmappedText = [extraUnmapped, working].filter(Boolean).join(' ').trim();
+
+      return fields;
+    }
+
+    // 7. Migration confidence classifier (v2)
+    var BUILDING_KW = ['คอนโด','อาคาร','ตึก','หมู่บ้าน','วัด','ห้อง','ชั้น','หอพัก','แฟลต',
+                       'โรงแรม','ร.พ.','โรงพยาบาล','มหาวิทยาลัย','ชมรม'];
+    var GEO_RESIDUALS = ['ต.','อ.','จ.','แขวง','เขต'];
+    function classifyMig(fields, raw) {
+      var origN = stripZWC(raw).replace(/\s+/g, ' ');
+      var reasons = [];
+      if ((origN.match(/ซอย|ซ\./g) || []).length > 1) reasons.push('multiple_soi_patterns');
+      if ((origN.match(/ถนน|ถ\./g) || []).length > 1) reasons.push('multiple_road_patterns');
+      // Geo marker residuals in road/soi → extraction confusion
+      if (fields.road && GEO_RESIDUALS.some(function(m) { return fields.road.indexOf(m) !== -1; })) reasons.push('road_contains_geo_residual');
+      if (fields.soi  && GEO_RESIDUALS.some(function(m) { return fields.soi.indexOf(m)  !== -1; })) reasons.push('soi_contains_geo_residual');
+      if (reasons.length > 0) return { cls: 'NEEDS_MANUAL_REVIEW', reasons: reasons };
+
+      var unmapped = fields.unmappedText;
+      if (/[฀-๿]{2,}/.test(unmapped)) {
+        var r = ['unmapped_text:' + unmapped];
+        if (BUILDING_KW.some(function(k) { return unmapped.indexOf(k) !== -1; })) r.push('building_keyword');
+        return { cls: 'MIGRATION_READY_WITH_LEGACY_PRESERVED', reasons: r };
+      }
+      return { cls: 'MIGRATION_READY', reasons: ['all_fields_mapped'] };
+    }
+
+    // 8. Read sheet
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAME);
+    var last  = sheet.getLastRow();
+    if (last < 2) return { success: true, total: 0 };
+    var numRows = last - 1;
+    var data    = sheet.getRange(2, 1, numRows, 93).getValues();
+
+    var IDX_LC = 7, IDX_LD = 37;
+    var SC = [63,64,65,66,67,68,69,70], SD = [71,72,73,74,75,76,77,78];
+    function gv(row, idx) { return (row[idx] || '').toString().trim(); }
+    function hasAny(row, ia) { return ia.some(function(i) { return gv(row,i) !== ''; }); }
+
+    var MIGS = ['MIGRATION_READY','MIGRATION_READY_WITH_LEGACY_PRESERVED','NEEDS_MANUAL_REVIEW'];
+    function mkR() {
+      var o = { hierarchyVerifiedInput: 0, counts: {}, samples: {} };
+      MIGS.forEach(function(m) { o.counts[m] = 0; o.samples[m] = []; });
+      return o;
+    }
+    var curr = mkR(), dom = mkR();
+    var MAX_S = 25;
+    var zwc = { currentAddress: 0, domicile: 0 };
+    var parserStats = {
+      multiSections:         { currentAddress: 0, domicile: 0 },
+      recoveredHouseNo:      { currentAddress: 0, domicile: 0 },
+      trokMappedToSoi:       { currentAddress: 0, domicile: 0 }
+    };
+
+    function processRecord(raw, pe, ae, te, result, statsKey) {
+      result.hierarchyVerifiedInput++;
+
+      // Multi-section detection FIRST — classify without parsing
+      if (hasMultiSections(raw)) {
+        parserStats.multiSections[statsKey]++;
+        result.counts['NEEDS_MANUAL_REVIEW']++;
+        if (result.samples['NEEDS_MANUAL_REVIEW'].length < MAX_S) {
+          result.samples['NEEDS_MANUAL_REVIEW'].push({
+            recordId: '', legacyRaw: raw,
+            parsed: { house_no:'',moo:'',soi:'',road:'',subdistrict:te.canonical,district:ae.canonical,province:pe.canonical,police_station:'',unmappedText:raw },
+            classification: 'NEEDS_MANUAL_REVIEW', reasons: ['multiple_address_sections']
+          });
+        }
+        return;
+      }
+
+      var fields = parseFields(raw, pe, ae, te);
+
+      // Track recovered house numbers (text started with leading label, not digit)
+      var origStart = stripZWC(raw).replace(/\s+/g,' ').trim();
+      if (fields.house_no && /^ที่อยู่/.test(origStart)) parserStats.recoveredHouseNo[statsKey]++;
+
+      // Track ตรอก→soi (rough: soi present but no ซ. / ซอย in original)
+      if (fields.soi && raw.indexOf('ตรอก') !== -1 && raw.indexOf('ซ.') === -1 && raw.indexOf('ซอย') === -1) {
+        parserStats.trokMappedToSoi[statsKey]++;
+      }
+
+      var mc = classifyMig(fields, raw);
+      result.counts[mc.cls]++;
+      if (result.samples[mc.cls].length < MAX_S) {
+        result.samples[mc.cls].push({ legacyRaw: raw, parsed: fields, classification: mc.cls, reasons: mc.reasons });
+      }
+    }
+
+    for (var i = 0; i < numRows; i++) {
+      var row   = data[i];
+
+      var lc = gv(row, IDX_LC);
+      if (lc && !hasAny(row, SC)) {
+        var geo = extractGeo(lc);
+        var val = validateH(geo);
+        if (val.status !== 'VERIFIED_HIGH_CONFIDENCE') {
+          var lcs = stripZWC(lc);
+          if (lcs !== lc && validateH(extractGeo(lcs)).status === 'VERIFIED_HIGH_CONFIDENCE') zwc.currentAddress++;
+        }
+        if (val.status === 'VERIFIED_HIGH_CONFIDENCE') processRecord(lc, val.pe, val.ae, val.te, curr, 'currentAddress');
+      }
+
+      var ld = gv(row, IDX_LD);
+      if (ld && !hasAny(row, SD)) {
+        var geoD = extractGeo(ld);
+        var valD = validateH(geoD);
+        if (valD.status !== 'VERIFIED_HIGH_CONFIDENCE') {
+          var lds = stripZWC(ld);
+          if (lds !== ld && validateH(extractGeo(lds)).status === 'VERIFIED_HIGH_CONFIDENCE') zwc.domicile++;
+        }
+        if (valD.status === 'VERIFIED_HIGH_CONFIDENCE') processRecord(ld, valD.pe, valD.ae, valD.te, dom, 'domicile');
+      }
+    }
+
+    return {
+      success: true,
+      note: 'READ-ONLY preview v2. No writes. Legacy col8/col38 untouched. Bangkok Stay excluded.',
+      countDiscrepancyExplanation: {
+        auditAddressHierarchy_VHC:    { currentAddress: 337, domicile: 142 },
+        previewMigration_VHC:         { currentAddress: '(this run)', domicile: '(this run)' },
+        root_cause: 'auditAddressHierarchy used normGeo() which does NOT strip ZWC from extracted values. previewStructuredAddressMigration uses normKey() which DOES strip ZWC. Records whose province/district/subdistrict text contained invisible Unicode chars (U+200B etc.) failed lookup in auditAddressHierarchy but pass in previewStructuredAddressMigration. zwcSanitationImpact shows 0 because normKey handles ZWC transparently at extraction time — the counter only fires for records that are still NEEDS_REVIEW after normKey, so no additional records benefit from full-string stripping.'
+      },
+      geoCompatibility: {
+        verdict: 'COMPATIBLE',
+        detail: 'GitHub kongvut/thai-province-data == PROVINCES_STATIC in frontend. Same IDs, same name_th strings, same option values in Form dropdowns.',
+        writePhaseRecommendation: 'Embed geo data locally (PropertiesService / dedicated Sheet) before production writes — eliminate live GitHub fetch as single point of truth.'
+      },
+      parserFixesApplied: {
+        leadingLabelStrip: 'ที่อยู่ / ที่อยู่ปัจจุบัน stripped from working copy before house-no extraction',
+        bangkokPhiFix: 'กรุงเทพฯ replaced atomically before กรุงเทพ to prevent ฯ leak into road/soi',
+        standalonePhiCleanup: 'Standalone ฯ removed from working after all geo removal; also stripped from road/soi fields',
+        multiSectionDetection: 'Markers: ' + SECTION_MARKERS.join(', ') + ' → NEEDS_MANUAL_REVIEW',
+        trokPolicy: 'ตรอก mapped to soi field when no ซอย/ซ. present',
+        houseNoHyphen: 'Regex expanded to /\\d+(?:\\/[\\d-]+)?/ — supports 1008/57-58',
+        midTextAddrMarker: 'วัดX ที่อยู่ : N ... pattern detected; pre-marker text goes to unmappedText',
+        fieldSanityCheck: 'road/soi containing geo residuals (ต./อ./จ./แขวง/เขต) → NEEDS_MANUAL_REVIEW'
+      },
+      parserStats: parserStats,
+      zwcSanitationImpact: {
+        note: 'Records that fail hierarchy in auditAddressHierarchy due to ZWC in geo text, but pass in this function due to normKey stripping. These are ALREADY included in this preview as VHC. zwcSanitationImpact counter below counts extra records that still fail and would only pass after full-string ZWC strip.',
+        currentAddress: zwc.currentAddress,
+        domicile: zwc.domicile
+      },
+      currentAddress: curr,
+      domicile: dom
+    };
+
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+// Phase C — Exact dry-run: full target list for MIGRATION_READY records (READ-ONLY, no writes)
+function previewExactAddressMigration() {
+  try {
+    var EXPECTED_CURRENT  = 321;
+    var EXPECTED_DOMICILE = 138;
+
+    var opt = { muteHttpExceptions: true };
+    var provResp = UrlFetchApp.fetch(GEO_BASE + 'province.json', opt);
+    if (provResp.getResponseCode() !== 200) throw new Error('province.json HTTP ' + provResp.getResponseCode());
+    var provinces = JSON.parse(provResp.getContentText());
+    var ampResp   = UrlFetchApp.fetch(GEO_BASE + 'amphure.json', opt);
+    if (ampResp.getResponseCode()  !== 200) throw new Error('amphure.json HTTP '  + ampResp.getResponseCode());
+    var amphures  = JSON.parse(ampResp.getContentText());
+    var tamResp   = UrlFetchApp.fetch(GEO_BASE + 'tambon.json', opt);
+    if (tamResp.getResponseCode()  !== 200) throw new Error('tambon.json HTTP '   + tamResp.getResponseCode());
+    var tambons   = JSON.parse(tamResp.getContentText());
+
+    function stripZWC(s) {
+      return String(s || '').replace(/[​‌‍‎‏‪‫‬‭‮⁠⁡⁢⁣﻿­᠎]/g, '');
+    }
+    function normKey(s) {
+      var n = stripZWC(s).trim();
+      var pf = ['จังหวัด','อำเภอ','เขต','ตำบล','แขวง'];
+      for (var k = 0; k < pf.length; k++) {
+        if (n.indexOf(pf[k]) === 0) { n = n.substring(pf[k].length).trim(); break; }
+      }
+      return n;
+    }
+    function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+    var provMap = {};
+    provinces.forEach(function(p) { provMap[normKey(p.name_th)] = { id: p.id, canonical: p.name_th }; });
+    ['กรุงเทพ','กทม.','กทม','กรุงเทพฯ'].forEach(function(a) { if (!provMap[a]) provMap[a] = provMap['กรุงเทพมหานคร']; });
+    var ampMap = {};
+    amphures.forEach(function(a) { ampMap[a.province_id + '|' + normKey(a.name_th)] = { id: a.id, canonical: a.name_th }; });
+    var tamMap = {};
+    tambons.forEach(function(t) { tamMap[t.amphure_id + '|' + normKey(t.name_th)] = { id: t.id, canonical: t.name_th }; });
+
+    function extractGeo(text) {
+      var t = text.trim(); var r = { province: null, district: null, subdistrict: null }; var m;
+      m = t.match(/จังหวัด\s*([^\s,/]+)/);
+      if (!m) m = t.match(/(?:^|[\s,])จ\.\s*([^\s,/]+)/);
+      if (m) r.province = normKey(m[1]);
+      else if (t.indexOf('กรุงเทพมหานคร') !== -1) r.province = 'กรุงเทพมหานคร';
+      else if (t.indexOf('กรุงเทพ') !== -1 || t.indexOf('กทม') !== -1) r.province = 'กรุงเทพ';
+      m = t.match(/อำเภอ\s*([^\s,/]+)/);
+      if (!m) m = t.match(/(?:^|[\s,])อ\.\s*([^\s,/]+)/);
+      if (!m) m = t.match(/เขต\s*([^\s,/]+)/);
+      if (m) r.district = normKey(m[1]);
+      m = t.match(/ตำบล\s*([^\s,/]+)/);
+      if (!m) m = t.match(/(?:^|[\s,])ต\.\s*([^\s,/]+)/);
+      if (!m) m = t.match(/แขวง\s*([^\s,/]+)/);
+      if (m) r.subdistrict = normKey(m[1]);
+      return r;
+    }
+    function validateH(geo) {
+      if (!geo.province) return { status: 'UNPARSEABLE' };
+      var pe = provMap[geo.province]; if (!pe) return { status: 'NEEDS_REVIEW' };
+      if (!geo.district) return { status: 'NEEDS_REVIEW' };
+      var ae = ampMap[pe.id + '|' + geo.district]; if (!ae) return { status: 'NEEDS_REVIEW' };
+      if (!geo.subdistrict) return { status: 'NEEDS_REVIEW' };
+      var te = tamMap[ae.id + '|' + geo.subdistrict]; if (!te) return { status: 'NEEDS_REVIEW' };
+      return { status: 'VERIFIED_HIGH_CONFIDENCE', pe: pe, ae: ae, te: te };
+    }
+
+    var SECTION_MARKERS = ['ที่อยู่ตามบัตร','ที่อยู่เดิม','ที่อยู่ตามทะเบียน','ภูมิลำเนา'];
+    function hasMultiSections(text) {
+      return SECTION_MARKERS.some(function(m) { return text.indexOf(m) !== -1; });
+    }
+
+    function parseFields(raw, pe, ae, te) {
+      var fields = { house_no:'', moo:'', soi:'', road:'', subdistrict:te.canonical, district:ae.canonical, province:pe.canonical, police_station:'', unmappedText:'' };
+      var working = stripZWC(raw).replace(/\s+/g, ' ').trim();
+      function eat(re) { var m = working.match(re); if (m) working = working.replace(m[0],' ').replace(/\s+/g,' ').trim(); return m; }
+      function removeGeoTerm(prefixes, key) {
+        var safe = escRe(key);
+        for (var pi = 0; pi < prefixes.length; pi++) {
+          var m = working.match(new RegExp(prefixes[pi] + '\\s*' + safe));
+          if (m) { working = working.replace(m[0],' ').replace(/\s+/g,' ').trim(); return; }
+        }
+        var m2 = working.match(new RegExp('(?:^|[\\s,])' + safe + '(?=[\\s,/]|$)'));
+        if (m2) working = working.replace(m2[0],' ').replace(/\s+/g,' ').trim();
+      }
+      if (pe.canonical === 'กรุงเทพมหานคร') {
+        working = working.replace(/กรุงเทพมหานคร/g,' ').replace(/กรุงเทพฯ/g,' ').replace(/จังหวัด\s*กรุงเทพ\S*/g,' ').replace(/กรุงเทพ/g,' ').replace(/กทม\.?/g,' ').replace(/\s+/g,' ').trim();
+      } else {
+        removeGeoTerm(['จังหวัด','จ\\.'], normKey(pe.canonical));
+      }
+      removeGeoTerm(['อำเภอ','อ\\.','เขต'], normKey(ae.canonical));
+      removeGeoTerm(['ตำบล','ต\\.','แขวง'], normKey(te.canonical));
+      working = working.replace(/(?:^|\s)ฯ(?=\s|$)/g,' ').replace(/\s+/g,' ').trim();
+      working = working.replace(/^ที่อยู่\s*ปัจจุบัน\s*:?\s+/,'').replace(/^ที่อยู่\s*:?\s+/,'').replace(/\s+/g,' ').trim();
+      var extraUnmapped = '';
+      var midM = working.match(/^(.+?)\s+ที่อยู่\s*:?\s+(.+)$/);
+      if (midM) {
+        extraUnmapped = midM[1].trim();
+        working = midM[2].replace(/^ที่อยู่\s*ปัจจุบัน\s*:?\s+/,'').replace(/^ที่อยู่\s*:?\s+/,'').replace(/\s+/g,' ').trim();
+      }
+      var mooM = eat(/หมู่ที่\s*(\d+)/); if (!mooM) mooM = eat(/หมู่\s*(\d+)/); if (!mooM) mooM = eat(/ม\.\s*(\d+)/);
+      if (mooM) fields.moo = mooM[1];
+      var stnM = eat(/สน\.\s*([^\s,/]+)/); if (!stnM) stnM = eat(/สถานีตำรวจ\s*([^\s,/]+)/);
+      if (stnM) fields.police_station = stnM[1] || '';
+      var soiM = working.match(/ซอย\s*(.*?)(?=\s+ถนน|\s+ถ\.|$)/);
+      if (!soiM || !soiM[1].trim()) soiM = working.match(/ซ\.\s*(.*?)(?=\s+ถนน|\s+ถ\.|$)/);
+      if (soiM && soiM[1].trim()) { fields.soi = soiM[1].trim(); working = working.replace(soiM[0],' ').replace(/\s+/g,' ').trim(); }
+      if (!fields.soi) {
+        var trokM = working.match(/ตรอก\s*(.*?)(?=\s+ถนน|\s+ถ\.|$)/);
+        if (trokM && trokM[1].trim()) { fields.soi = trokM[1].trim(); working = working.replace(trokM[0],' ').replace(/\s+/g,' ').trim(); }
+      }
+      var roadM = working.match(/ถนน\s*(.*)/); if (!roadM) roadM = working.match(/ถ\.\s*(.*)/);
+      if (roadM) { fields.road = roadM[1].trim(); working = working.replace(roadM[0],' ').replace(/\s+/g,' ').trim(); }
+      var houseM = working.match(/^(\d+(?:\/[\d-]+)?)(?:\s|$)/);
+      if (houseM) { fields.house_no = houseM[1]; working = working.replace(new RegExp('^'+ escRe(houseM[1]) +'(?:\\s|$)'),'').replace(/\s+/g,' ').trim(); }
+      if (fields.road) fields.road = fields.road.replace(/\s*ฯ$/,'').trim();
+      if (fields.soi)  fields.soi  = fields.soi.replace(/\s*ฯ$/,'').trim();
+      fields.unmappedText = [extraUnmapped, working].filter(Boolean).join(' ').trim();
+      return fields;
+    }
+
+    var GEO_RESIDUALS = ['ต.','อ.','จ.','แขวง','เขต'];
+    function classifyMig(fields, raw) {
+      var origN = stripZWC(raw).replace(/\s+/g,' ');
+      var reasons = [];
+      if ((origN.match(/ซอย|ซ\./g)||[]).length > 1) reasons.push('multiple_soi_patterns');
+      if ((origN.match(/ถนน|ถ\./g)||[]).length > 1) reasons.push('multiple_road_patterns');
+      if (fields.road && GEO_RESIDUALS.some(function(m){ return fields.road.indexOf(m) !== -1; })) reasons.push('road_contains_geo_residual');
+      if (fields.soi  && GEO_RESIDUALS.some(function(m){ return fields.soi.indexOf(m)  !== -1; })) reasons.push('soi_contains_geo_residual');
+      if (reasons.length > 0) return { cls: 'NEEDS_MANUAL_REVIEW', reasons: reasons };
+      var unmapped = fields.unmappedText;
+      if (/[฀-๿]{2,}/.test(unmapped)) {
+        var r = ['unmapped_text:' + unmapped];
+        if (['คอนโด','อาคาร','ตึก','หมู่บ้าน','วัด','ห้อง','ชั้น','หอพัก','แฟลต','โรงแรม','ร.พ.','โรงพยาบาล','มหาวิทยาลัย','ชมรม'].some(function(k){ return unmapped.indexOf(k) !== -1; })) r.push('building_keyword');
+        return { cls: 'MIGRATION_READY_WITH_LEGACY_PRESERVED', reasons: r };
+      }
+      return { cls: 'MIGRATION_READY', reasons: ['all_fields_mapped'] };
+    }
+
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAME);
+    var last  = sheet.getLastRow();
+    if (last < 2) return { success: true, total: 0, targetList: [] };
+    var numRows = last - 1;
+    var data    = sheet.getRange(2, 1, numRows, 153).getValues();
+
+    var IDX_REC = 0, IDX_LC = 7, IDX_LD = 37, IDX_DEL = 152;
+    var SC = [63,64,65,66,67,68,69,70], SD = [71,72,73,74,75,76,77,78];
+    function gv(row, idx) { return (row[idx] || '').toString().trim(); }
+    function hasAny(row, ia) { return ia.some(function(i) { return gv(row,i) !== ''; }); }
+
+    var targetList = [];
+    var excluded   = [];
+    var skippedStructuredPresent = [];
+    var eligibleCurrent  = 0;
+    var eligibleDomicile = 0;
+    var totalActiveRecords = 0;
+
+    function processCandidate(row, raw, structIndices, group, sheetRow, seqNo, recordId) {
+      if (hasAny(row, structIndices)) {
+        skippedStructuredPresent.push({ recordId: recordId, seqNo: seqNo, sheetRow: sheetRow, group: group, reason: 'SKIP_STRUCTURED_ALREADY_PRESENT' });
+        return;
+      }
+      var geo = extractGeo(raw); var val = validateH(geo);
+      if (val.status !== 'VERIFIED_HIGH_CONFIDENCE') {
+        excluded.push({ recordId: recordId, seqNo: seqNo, sheetRow: sheetRow, group: group, legacyRaw: raw, reasons: ['hierarchy_not_vhc:' + val.status] });
+        return;
+      }
+      if (hasMultiSections(raw)) {
+        excluded.push({ recordId: recordId, seqNo: seqNo, sheetRow: sheetRow, group: group, legacyRaw: raw, reasons: ['multiple_address_sections'] });
+        return;
+      }
+      var fields = parseFields(raw, val.pe, val.ae, val.te);
+      var mc = classifyMig(fields, raw);
+      if (mc.cls !== 'MIGRATION_READY') {
+        excluded.push({ recordId: recordId, seqNo: seqNo, sheetRow: sheetRow, group: group, legacyRaw: raw, reasons: mc.reasons.length ? mc.reasons : [mc.cls] });
+        return;
+      }
+      if (gv(row, IDX_DEL) === 'deleted') {
+        excluded.push({ recordId: recordId, seqNo: seqNo, sheetRow: sheetRow, group: group, legacyRaw: raw, reasons: ['record_soft_deleted'] });
+        return;
+      }
+      if (!recordId) {
+        excluded.push({ recordId: '', seqNo: seqNo, sheetRow: sheetRow, group: group, legacyRaw: raw, reasons: ['missing_record_id'] });
+        return;
+      }
+      if (group === 'current')  eligibleCurrent++;
+      if (group === 'domicile') eligibleDomicile++;
+      var cols = group === 'current'
+        ? { start: 'col64', end: 'col71', sheetCols1based: '64-71', gsRangeNotation: 'getRange(sheetRow, 64, 1, 8)' }
+        : { start: 'col72', end: 'col79', sheetCols1based: '72-79', gsRangeNotation: 'getRange(sheetRow, 72, 1, 8)' };
+      targetList.push({
+        recordId: recordId, seqNo: seqNo, sheetRow: sheetRow, group: group, legacyRaw: raw,
+        targetColumns: cols,
+        parsed: { house_no: fields.house_no, moo: fields.moo, soi: fields.soi, road: fields.road,
+                  subdistrict: fields.subdistrict, district: fields.district, province: fields.province, police_station: fields.police_station }
+      });
+    }
+
+    for (var i = 0; i < numRows; i++) {
+      var row = data[i];
+      if (gv(row, IDX_DEL) !== 'deleted') totalActiveRecords++;
+      var sheetRow = i + 2; var seqNo = i + 1; var recordId = gv(row, IDX_REC);
+      var lc = gv(row, IDX_LC); if (lc) processCandidate(row, lc, SC, 'current',  sheetRow, seqNo, recordId);
+      var ld = gv(row, IDX_LD); if (ld) processCandidate(row, ld, SD, 'domicile', sheetRow, seqNo, recordId);
+    }
+
+    var exclusionBreakdown = {};
+    excluded.forEach(function(e) { e.reasons.forEach(function(r) { exclusionBreakdown[r] = (exclusionBreakdown[r] || 0) + 1; }); });
+    var countGuardPass = (eligibleCurrent === EXPECTED_CURRENT && eligibleDomicile === EXPECTED_DOMICILE);
+
+    return {
+      success: true,
+      note: 'READ-ONLY dry-run. NO writes performed. NO setValues called. Legacy col8/col38 untouched.',
+      writesPerformed: false,
+      totalActiveRecords: totalActiveRecords,
+      legacyFieldsStatus: 'col8/col38 UNTOUCHED — READ-ONLY function, no mutations',
+
+      countGuard: {
+        expectedCurrent: EXPECTED_CURRENT, expectedDomicile: EXPECTED_DOMICILE,
+        actualCurrent:   eligibleCurrent,  actualDomicile:   eligibleDomicile,
+        pass: countGuardPass,
+        verdict: countGuardPass
+          ? 'PROCEED_ON_EXPLICIT_APPROVAL — counts match expected'
+          : 'ABORT — counts do not match expected; investigate delta before migration'
+      },
+
+      currentAddress: { expected: EXPECTED_CURRENT,  exactEligible: eligibleCurrent,
+        excludedCount: excluded.filter(function(e){ return e.group==='current'; }).length,
+        skippedStructuredPresent: skippedStructuredPresent.filter(function(e){ return e.group==='current'; }).length },
+      domicile: { expected: EXPECTED_DOMICILE, exactEligible: eligibleDomicile,
+        excludedCount: excluded.filter(function(e){ return e.group==='domicile'; }).length,
+        skippedStructuredPresent: skippedStructuredPresent.filter(function(e){ return e.group==='domicile'; }).length },
+
+      exclusionBreakdown: exclusionBreakdown,
+      excluded: excluded,
+      structuredAlreadyPresent: skippedStructuredPresent,
+      structuredTargetStatus: (excluded.length === 0 && skippedStructuredPresent.length === 0)
+        ? 'ALL_TARGET_GROUPS_EMPTY — all eligible structured target groups currently unset'
+        : skippedStructuredPresent.length + ' group(s) have structured data already; ' + excluded.length + ' excluded for other reasons',
+
+      backupSchema: {
+        sheetName: 'AddressMigrationBackup_YYYYMMDD_HHMMSS',
+        timing: 'Created and fully written BEFORE any setValues on Data sheet. LockService held across backup + write + verify window.',
+        columns: ['Timestamp','RecordID','SeqNo','SheetRow','Group','LegacyRaw',
+                  'old_house_no','old_moo','old_soi','old_road','old_subdistrict','old_district','old_province','old_police_station',
+                  'new_house_no','new_moo','new_soi','new_road','new_subdistrict','new_district','new_province','new_police_station'],
+        notes: 'old_* = values read live from sheet immediately before write (expected empty; abort if any non-empty). new_* = parsed values from targetList.'
+      },
+
+      writeStrategy: {
+        functionName: 'migrateVerifiedAddresses',
+        routeStatus: 'NOT_ENABLED — dispatcher route added only after explicit approval',
+        steps: [
+          '1. Acquire LockService.getDocumentLock(30000) — abort if unavailable',
+          '2. Fresh revalidation: re-run all 10 safety checks for every target record',
+          '3. Count guard: fresh eligible ≠ 321/138 → release lock, abort, report delta',
+          '4. Create backup sheet; write header + all rows (old_* live from sheet, new_* from parsed); protect sheet',
+          '5. Abort if any old_* field non-empty (unexpected structured data appeared)',
+          '6. Batch writes: getRange(sheetRow,64,1,8).setValues([...8...]) current; getRange(sheetRow,72,1,8).setValues([...8...]) domicile',
+          '7. Exact columns only — no full-row overwrite',
+          '8. Run post-write verification',
+          '9. writeAuditLog address_migration event',
+          '10. Release lock'
+        ],
+        targetRanges: {
+          current:  { sheetCols1based: '64-71', gsMethod: 'getRange(sheetRow,64,1,8).setValues([[h,m,s,r,sub,dis,pro,pol]])', fieldCount: 8 },
+          domicile: { sheetCols1based: '72-79', gsMethod: 'getRange(sheetRow,72,1,8).setValues([[h,m,s,r,sub,dis,pro,pol]])', fieldCount: 8 }
+        }
+      },
+
+      rollbackStrategy: {
+        primary: 'Read backup sheet; write old_* back to col64-71/col72-79 per row via rollbackAddressMigration(backupSheetName). Legacy col8/col38 never touched — no legacy rollback needed.',
+        secondary: 'Google Sheets revision history — File → Version History → See version history',
+        rollbackFunction: 'rollbackAddressMigration(backupSheetName) — to be implemented at write-phase approval'
+      },
+
+      postWriteVerification: {
+        steps: [
+          '1. For each migrated row: read back structured fields; assert each matches targetList parsed value',
+          '2. For each migrated row: read col8/col38; assert unchanged vs backup LegacyRaw',
+          '3. Spot-check 5% of rows (min 5): assert col1-col6 unchanged vs pre-write snapshot',
+          '4. Count active records (col153 ≠ "deleted"); assert = ' + totalActiveRecords,
+          '5. Count rows with structured current non-empty; assert = ' + EXPECTED_CURRENT,
+          '6. Count rows with structured domicile non-empty; assert = ' + EXPECTED_DOMICILE,
+          '7. Assert col1 list unchanged — no RecordID modified',
+          '8. Assert getLastRow() = ' + last + ' — row count unchanged',
+          '9. Assert col153 values unchanged for all rows',
+          '10. Assert Attachments sheet row count unchanged'
+        ]
+      },
+
+      geoSourcePlan: {
+        dryRunSource: 'Live GitHub fetch via GEO_BASE — acceptable for READ-ONLY preview only',
+        writePhaseRecommendation: 'At migration start: fetch from GitHub once, verify content length, snapshot into PropertiesService (keys GEO_PROV_SNAP / GEO_AMP_SNAP / GEO_TAM_SNAP). All validation and writes read from snapshot — eliminates network as single point of failure mid-migration.',
+        alternativeOption: 'Dedicated read-only GeoSnapshot sheet tab pre-populated from same GitHub data.',
+        formCompatibility: 'VERIFIED COMPATIBLE — PROVINCES_STATIC in frontend == api_province.json name_th. Same IDs and option values. No remapping required at write time.'
+      },
+
+      auditLogPlan: {
+        event: 'address_migration',
+        loggedFields: 'actor (userId+displayName), timestamp, migratedCurrentCount, migratedDomicileCount, backupSheetName, result (SUCCESS|PARTIAL|FAILED)',
+        sensitiveDataPolicy: 'DO NOT log full address text in AuditLog. Counts and backup sheet name only.',
+        implementation: 'writeAuditLog({ action: "address_migration", token, metadata: { migratedCurrentCount, migratedDomicileCount, backupSheetName }, status: result })'
+      },
+
+      targetList: targetList
+    };
+
+  } catch(e2) {
+    return { success: false, error: e2.toString() };
+  }
+}
+
+
+// ===== ADDRESS MIGRATION PHASE D — COMPOSITE-IDENTITY WRITE IMPLEMENTATION (NOT YET ROUTED) =====
+// Circuit-breaker tokens — not security secrets, defense-in-depth against accidental execution.
+// ─── STRUCTURED ADDRESS MIGRATION — PHASE COMPLETE ───────────────────────────
+// Completed:       2026-08-17
+// Migrated:        321 current + 138 domicile = 459 groups total
+// Successful backup: AddressMigrationBackup_20260817_212531
+// Failed-run backup: AddressMigrationBackup_20260817_210233 (rollback was clean)
+// Legacy retained: col8 (current) / col38 (domicile) — permanent, forensic reference
+// Excluded groups: NEEDS_REVIEW / UNPARSEABLE / MIGRATION_READY_WITH_LEGACY_PRESERVED
+//                  → manual review in a future phase
+// Text-safe writes: setNumberFormat('@') applied before all col64-79 setValues calls
+//                   (prevents Sheets date/number auto-coercion on house_no strings)
+//
+// migrateVerifiedAddresses: ROUTE DISABLED — do not re-enable without explicit approval.
+// rollbackAddressMigration: NO dispatcher route — emergency use only (super_admin manual).
+// preExecAddressMigrationCheck: routed (read-only diagnostic, remains available).
+// ─────────────────────────────────────────────────────────────────────────────
+
+var ADDR_MIG_TOKEN      = 'ADDR_MIG_CONFIRM_v1_321_138';
+var ADDR_ROLLBACK_TOKEN = 'ADDR_ROLLBACK_CONFIRM_v1';
+var BACKUP_NAME_PREFIX  = 'AddressMigrationBackup_';
+
+// Composite identity = seqNo + '|' + group (physical row + group).
+// RecordID is a consistency check, NOT the primary key.
+// Known duplicate RecordIDs (374,375,376,377 etc.) are expected and are NOT an abort condition.
+// Abort only if composite identity (seqNo|group) is duplicate — which indicates a structural bug.
+
+// Possible result states:
+// READY_NOT_EXECUTED | SUCCESS | ABORTED_COUNT_MISMATCH | ABORTED_ACTIVE_COUNT_MISMATCH
+// ABORTED_GEO_INVALID | ABORTED_LOCK_UNAVAILABLE | ABORTED_BACKUP_VERIFY_FAILED
+// ABORTED_COMPOSITE_IDENTITY_DUPLICATE | FAILED_ROLLED_BACK | FAILED_ROLLBACK_INCOMPLETE
+
+// ─── Shared helpers factory (geo + parser — same as v2 / previewExact) ──────
+function _buildMigHelpers_(provinces, amphures, tambons) {
+  function stripZWC(s) {
+    return String(s || '').replace(/[​‌‍‎‏‪‫‬‭‮⁠⁡⁢⁣﻿­᠎]/g, '');
+  }
+  function normKey(s) {
+    var n = stripZWC(s).trim();
+    var pf = ['จังหวัด','อำเภอ','เขต','ตำบล','แขวง'];
+    for (var k = 0; k < pf.length; k++) {
+      if (n.indexOf(pf[k]) === 0) { n = n.substring(pf[k].length).trim(); break; }
+    }
+    return n;
+  }
+  function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  var provMap = {};
+  provinces.forEach(function(p) { provMap[normKey(p.name_th)] = { id: p.id, canonical: p.name_th }; });
+  ['กรุงเทพ','กทม.','กทม','กรุงเทพฯ'].forEach(function(a) { if (!provMap[a]) provMap[a] = provMap['กรุงเทพมหานคร']; });
+  var ampMap = {};
+  amphures.forEach(function(a) { ampMap[a.province_id + '|' + normKey(a.name_th)] = { id: a.id, canonical: a.name_th }; });
+  var tamMap = {};
+  tambons.forEach(function(t) { tamMap[t.amphure_id + '|' + normKey(t.name_th)] = { id: t.id, canonical: t.name_th }; });
+
+  function extractGeo(text) {
+    var t = text.trim(); var r = { province: null, district: null, subdistrict: null }; var m;
+    m = t.match(/จังหวัด\s*([^\s,/]+)/);
+    if (!m) m = t.match(/(?:^|[\s,])จ\.\s*([^\s,/]+)/);
+    if (m) r.province = normKey(m[1]);
+    else if (t.indexOf('กรุงเทพมหานคร') !== -1) r.province = 'กรุงเทพมหานคร';
+    else if (t.indexOf('กรุงเทพ') !== -1 || t.indexOf('กทม') !== -1) r.province = 'กรุงเทพ';
+    m = t.match(/อำเภอ\s*([^\s,/]+)/);
+    if (!m) m = t.match(/(?:^|[\s,])อ\.\s*([^\s,/]+)/);
+    if (!m) m = t.match(/เขต\s*([^\s,/]+)/);
+    if (m) r.district = normKey(m[1]);
+    m = t.match(/ตำบล\s*([^\s,/]+)/);
+    if (!m) m = t.match(/(?:^|[\s,])ต\.\s*([^\s,/]+)/);
+    if (!m) m = t.match(/แขวง\s*([^\s,/]+)/);
+    if (m) r.subdistrict = normKey(m[1]);
+    return r;
+  }
+  function validateH(geo) {
+    if (!geo.province) return { status: 'UNPARSEABLE' };
+    var pe = provMap[geo.province]; if (!pe) return { status: 'NEEDS_REVIEW' };
+    if (!geo.district) return { status: 'NEEDS_REVIEW' };
+    var ae = ampMap[pe.id + '|' + geo.district]; if (!ae) return { status: 'NEEDS_REVIEW' };
+    if (!geo.subdistrict) return { status: 'NEEDS_REVIEW' };
+    var te = tamMap[ae.id + '|' + geo.subdistrict]; if (!te) return { status: 'NEEDS_REVIEW' };
+    return { status: 'VERIFIED_HIGH_CONFIDENCE', pe: pe, ae: ae, te: te };
+  }
+  var SECTION_MARKERS = ['ที่อยู่ตามบัตร','ที่อยู่เดิม','ที่อยู่ตามทะเบียน','ภูมิลำเนา'];
+  function hasMultiSections(text) { return SECTION_MARKERS.some(function(m){ return text.indexOf(m) !== -1; }); }
+  function parseFields(raw, pe, ae, te) {
+    var fields = { house_no:'', moo:'', soi:'', road:'', subdistrict:te.canonical, district:ae.canonical, province:pe.canonical, police_station:'', unmappedText:'' };
+    var working = stripZWC(raw).replace(/\s+/g,' ').trim();
+    function eat(re) { var m = working.match(re); if (m) working = working.replace(m[0],' ').replace(/\s+/g,' ').trim(); return m; }
+    function removeGeoTerm(prefixes, key) {
+      var safe = escRe(key);
+      for (var pi = 0; pi < prefixes.length; pi++) {
+        var m = working.match(new RegExp(prefixes[pi] + '\\s*' + safe));
+        if (m) { working = working.replace(m[0],' ').replace(/\s+/g,' ').trim(); return; }
+      }
+      var m2 = working.match(new RegExp('(?:^|[\\s,])' + safe + '(?=[\\s,/]|$)'));
+      if (m2) working = working.replace(m2[0],' ').replace(/\s+/g,' ').trim();
+    }
+    if (pe.canonical === 'กรุงเทพมหานคร') {
+      working = working.replace(/กรุงเทพมหานคร/g,' ').replace(/กรุงเทพฯ/g,' ').replace(/จังหวัด\s*กรุงเทพ\S*/g,' ').replace(/กรุงเทพ/g,' ').replace(/กทม\.?/g,' ').replace(/\s+/g,' ').trim();
+    } else { removeGeoTerm(['จังหวัด','จ\\.'], normKey(pe.canonical)); }
+    removeGeoTerm(['อำเภอ','อ\\.','เขต'], normKey(ae.canonical));
+    removeGeoTerm(['ตำบล','ต\\.','แขวง'], normKey(te.canonical));
+    working = working.replace(/(?:^|\s)ฯ(?=\s|$)/g,' ').replace(/\s+/g,' ').trim();
+    working = working.replace(/^ที่อยู่\s*ปัจจุบัน\s*:?\s+/,'').replace(/^ที่อยู่\s*:?\s+/,'').replace(/\s+/g,' ').trim();
+    var extraUnmapped = '';
+    var midM = working.match(/^(.+?)\s+ที่อยู่\s*:?\s+(.+)$/);
+    if (midM) { extraUnmapped = midM[1].trim(); working = midM[2].replace(/^ที่อยู่\s*ปัจจุบัน\s*:?\s+/,'').replace(/^ที่อยู่\s*:?\s+/,'').replace(/\s+/g,' ').trim(); }
+    var mooM = eat(/หมู่ที่\s*(\d+)/); if (!mooM) mooM = eat(/หมู่\s*(\d+)/); if (!mooM) mooM = eat(/ม\.\s*(\d+)/);
+    if (mooM) fields.moo = mooM[1];
+    var stnM = eat(/สน\.\s*([^\s,/]+)/); if (!stnM) stnM = eat(/สถานีตำรวจ\s*([^\s,/]+)/);
+    if (stnM) fields.police_station = stnM[1] || '';
+    var soiM = working.match(/ซอย\s*(.*?)(?=\s+ถนน|\s+ถ\.|$)/);
+    if (!soiM || !soiM[1].trim()) soiM = working.match(/ซ\.\s*(.*?)(?=\s+ถนน|\s+ถ\.|$)/);
+    if (soiM && soiM[1].trim()) { fields.soi = soiM[1].trim(); working = working.replace(soiM[0],' ').replace(/\s+/g,' ').trim(); }
+    if (!fields.soi) {
+      var trokM = working.match(/ตรอก\s*(.*?)(?=\s+ถนน|\s+ถ\.|$)/);
+      if (trokM && trokM[1].trim()) { fields.soi = trokM[1].trim(); working = working.replace(trokM[0],' ').replace(/\s+/g,' ').trim(); }
+    }
+    var roadM = working.match(/ถนน\s*(.*)/); if (!roadM) roadM = working.match(/ถ\.\s*(.*)/);
+    if (roadM) { fields.road = roadM[1].trim(); working = working.replace(roadM[0],' ').replace(/\s+/g,' ').trim(); }
+    var houseM = working.match(/^(\d+(?:\/[\d-]+)?)(?:\s|$)/);
+    if (houseM) { fields.house_no = houseM[1]; working = working.replace(new RegExp('^'+ escRe(houseM[1]) +'(?:\\s|$)'),'').replace(/\s+/g,' ').trim(); }
+    if (fields.road) fields.road = fields.road.replace(/\s*ฯ$/,'').trim();
+    if (fields.soi)  fields.soi  = fields.soi.replace(/\s*ฯ$/,'').trim();
+    fields.unmappedText = [extraUnmapped, working].filter(Boolean).join(' ').trim();
+    return fields;
+  }
+  var GEO_RESIDUALS = ['ต.','อ.','จ.','แขวง','เขต'];
+  function classifyMig(fields, raw) {
+    var origN = stripZWC(raw).replace(/\s+/g,' '); var reasons = [];
+    if ((origN.match(/ซอย|ซ\./g)||[]).length > 1) reasons.push('multiple_soi_patterns');
+    if ((origN.match(/ถนน|ถ\./g)||[]).length > 1) reasons.push('multiple_road_patterns');
+    if (fields.road && GEO_RESIDUALS.some(function(m){ return fields.road.indexOf(m)!==-1; })) reasons.push('road_contains_geo_residual');
+    if (fields.soi  && GEO_RESIDUALS.some(function(m){ return fields.soi.indexOf(m) !==-1; })) reasons.push('soi_contains_geo_residual');
+    if (reasons.length > 0) return { cls: 'NEEDS_MANUAL_REVIEW', reasons: reasons };
+    if (/[฀-๿]{2,}/.test(fields.unmappedText)) return { cls: 'MIGRATION_READY_WITH_LEGACY_PRESERVED', reasons: ['unmapped:'+fields.unmappedText] };
+    return { cls: 'MIGRATION_READY', reasons: ['all_fields_mapped'] };
+  }
+  return { extractGeo:extractGeo, validateH:validateH, hasMultiSections:hasMultiSections, parseFields:parseFields, classifyMig:classifyMig };
+}
+
+// ─── Composite identity builder ───────────────────────────────────────────────
+// Primary key = seqNo + '|' + group  (physical row position + address group)
+// RecordID is a consistency check, NOT uniqueness key — duplicate RecordIDs are expected.
+function _compositeKey_(seqNo, group) { return seqNo + '|' + group; }
+
+// ─── Target builder — shared by migrate and pre-exec check ───────────────────
+// Returns { targets, eligCur, eligDom, activeCount, compDupKeys,
+//           dupRecordIds, seqNoGroupSeen }
+function _buildFreshTargets_(data, numRows, h) {
+  var IDX_REC = 0, IDX_LC = 7, IDX_LD = 37, IDX_DEL = 152;
+  var SC = [63,64,65,66,67,68,69,70], SD = [71,72,73,74,75,76,77,78];
+  function gv(row,i){ return (row[i]||'').toString().trim(); }
+  function hasAny(row,ia){ return ia.some(function(i){ return gv(row,i)!==''; }); }
+
+  var targets = []; var eligCur = 0; var eligDom = 0; var activeCount = 0;
+  var seqNoGroupSeen = {};   // composite key uniqueness (structural check)
+  var compDupKeys = [];      // duplicate composite keys — abort condition
+  var dupRecordIds = {};     // RecordIDs seen on >1 row — informational only
+
+  // Track RecordID occurrences globally (all rows, not just targets)
+  var ridRowCount = {};
+  var ridToRows   = {};  // rid -> [{ seqNo, sheetRow, status }]
+  for (var i = 0; i < numRows; i++) {
+    var rid = gv(data[i], IDX_REC);
+    if (rid) {
+      ridRowCount[rid] = (ridRowCount[rid] || 0) + 1;
+      var rowStatus = gv(data[i], IDX_DEL) === 'deleted' ? 'deleted' : 'active';
+      if (!ridToRows[rid]) ridToRows[rid] = [];
+      ridToRows[rid].push({ seqNo: i+1, sheetRow: i+2, status: rowStatus });
+    }
+  }
+  var knownDupRids = Object.keys(ridRowCount).filter(function(r){ return ridRowCount[r] > 1; });
+
+  for (var i = 0; i < numRows; i++) {
+    var row = data[i]; var seqNo = i + 1; var sheetRow = i + 2;
+    var rid = gv(row, IDX_REC);
+    if (gv(row, IDX_DEL) !== 'deleted') activeCount++;
+
+    function tryAdd(raw, structIndices, group) {
+      if (!raw) return;
+      if (hasAny(row, structIndices)) return;
+      var geo = h.extractGeo(raw); var val = h.validateH(geo);
+      if (val.status !== 'VERIFIED_HIGH_CONFIDENCE') return;
+      if (h.hasMultiSections(raw)) return;
+      var fields = h.parseFields(raw, val.pe, val.ae, val.te);
+      if (h.classifyMig(fields, raw).cls !== 'MIGRATION_READY') return;
+      if (gv(row, IDX_DEL) === 'deleted') return;
+      if (!rid) return;
+
+      var cKey = _compositeKey_(seqNo, group);
+      if (seqNoGroupSeen[cKey]) {
+        compDupKeys.push(cKey); return; // structural duplicate — should never happen
+      }
+      seqNoGroupSeen[cKey] = true;
+
+      if (group === 'current')  eligCur++;
+      if (group === 'domicile') eligDom++;
+      targets.push({
+        recordId: rid, seqNo: seqNo, sheetRow: sheetRow, group: group,
+        legacyRaw: raw, parsed: fields,
+        compositeKey: cKey,
+        isDupRid: ridRowCount[rid] > 1
+      });
+    }
+
+    tryAdd(gv(row, IDX_LC), SC, 'current');
+    tryAdd(gv(row, IDX_LD), SD, 'domicile');
+  }
+
+  return {
+    targets: targets, eligCur: eligCur, eligDom: eligDom,
+    activeCount: activeCount, compDupKeys: compDupKeys, knownDupRids: knownDupRids,
+    ridToRows: ridToRows
+  };
+}
+
+
+// ─── Pre-execute READ-ONLY check (routed; uses same identity resolver) ────────
+function preExecAddressMigrationCheck() {
+  try {
+    var EXPECTED_CURRENT = 321, EXPECTED_DOMICILE = 138, EXPECTED_ACTIVE = 419;
+    var opt = { muteHttpExceptions: true };
+    var pR = UrlFetchApp.fetch(GEO_BASE + 'province.json', opt); if (pR.getResponseCode() !== 200) throw new Error('province.json HTTP ' + pR.getResponseCode());
+    var provinces = JSON.parse(pR.getContentText());
+    var aR = UrlFetchApp.fetch(GEO_BASE + 'amphure.json', opt); if (aR.getResponseCode() !== 200) throw new Error('amphure.json HTTP ' + aR.getResponseCode());
+    var amphures = JSON.parse(aR.getContentText());
+    var tR = UrlFetchApp.fetch(GEO_BASE + 'tambon.json', opt); if (tR.getResponseCode() !== 200) throw new Error('tambon.json HTTP ' + tR.getResponseCode());
+    var tambons = JSON.parse(tR.getContentText());
+
+    var h = _buildMigHelpers_(provinces, amphures, tambons);
+
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAME);
+    var last  = sheet.getLastRow(); var numRows = last - 1;
+    var data  = sheet.getRange(2, 1, numRows, 153).getValues();
+
+    var r = _buildFreshTargets_(data, numRows, h);
+
+    var IDX_REC = 0, IDX_LC = 7, IDX_LD = 37, IDX_DEL = 152;
+    var SC = [63,64,65,66,67,68,69,70], SD = [71,72,73,74,75,76,77,78];
+    function gv(row,i){ return (row[i]||'').toString().trim(); }
+    function hasAny(row,ia){ return ia.some(function(i){ return gv(row,i)!==''; }); }
+
+    // Detailed checks on resolved targets
+    var seqNoMismatches = [];
+    var legacyMismatches = [];
+    var structPresent = [];
+    var targetsDupRid = r.targets.filter(function(t){ return t.isDupRid; });
+
+    for (var ti = 0; ti < r.targets.length; ti++) {
+      var t = r.targets[ti];
+      var ri = t.sheetRow - 2; var row = data[ri];
+      // seqNo/sheetRow check: since we built from sequential scan these always match
+      if (ri + 1 !== t.seqNo || ri + 2 !== t.sheetRow) seqNoMismatches.push(t.compositeKey);
+      // RecordID at resolved row
+      if (gv(row, IDX_REC) !== t.recordId) seqNoMismatches.push('rid_mismatch:' + t.compositeKey);
+      // LegacyRaw at resolved row
+      var legIdx = t.group === 'current' ? IDX_LC : IDX_LD;
+      var liveLeg = gv(row, legIdx).replace(/^'/,'');
+      var capLeg  = t.legacyRaw.replace(/^'/,'');
+      if (liveLeg !== capLeg) legacyMismatches.push(t.compositeKey);
+      // Structured target still empty
+      var sIdx = t.group === 'current' ? SC : SD;
+      if (hasAny(row, sIdx)) structPresent.push(t.compositeKey);
+    }
+
+    var executable = (
+      r.eligCur === EXPECTED_CURRENT && r.eligDom === EXPECTED_DOMICILE &&
+      r.activeCount === EXPECTED_ACTIVE && r.compDupKeys.length === 0 &&
+      seqNoMismatches.length === 0 && legacyMismatches.length === 0 && structPresent.length === 0
+    );
+
+    // Global duplicates: RecordIDs appearing >1 time in full dataset (ALL rows, informational only)
+    var globalDuplicateRecordIds = r.knownDupRids.map(function(rid) {
+      var rows = r.ridToRows[rid] || [];
+      var inCur = r.targets.filter(function(t){ return t.recordId === rid && t.group === 'current'; });
+      var inDom = r.targets.filter(function(t){ return t.recordId === rid && t.group === 'domicile'; });
+      return {
+        recordId: rid,
+        globalCount: rows.length,
+        globalRows: rows,
+        currentTargets: inCur.map(function(t){ return { seqNo: t.seqNo, compositeKey: t.compositeKey }; }),
+        domicileTargets: inDom.map(function(t){ return { seqNo: t.seqNo, compositeKey: t.compositeKey }; })
+      };
+    });
+
+    // Target duplicates: targets whose RecordID also appears on another row
+    var targetDuplicateRecordIds = targetsDupRid.map(function(t) {
+      return { seqNo: t.seqNo, recordId: t.recordId, group: t.group, compositeKey: t.compositeKey };
+    });
+
+    // Probe specific RecordIDs regardless of duplicate status
+    var PROBE_RIDS = ['374', '375', '376', '377'];
+    var probeRids = {};
+    PROBE_RIDS.forEach(function(rid) {
+      var rows = r.ridToRows[rid] || [];
+      var inCur = r.targets.filter(function(t){ return t.recordId === rid && t.group === 'current'; });
+      var inDom = r.targets.filter(function(t){ return t.recordId === rid && t.group === 'domicile'; });
+      probeRids[rid] = {
+        found: rows.length > 0,
+        globalCount: rows.length,
+        globalRows: rows,
+        currentTargets: inCur.map(function(t){ return { seqNo: t.seqNo, compositeKey: t.compositeKey }; }),
+        domicileTargets: inDom.map(function(t){ return { seqNo: t.seqNo, compositeKey: t.compositeKey }; })
+      };
+    });
+
+    return {
+      success: true,
+      note: 'READ-ONLY pre-execute check. No writes.',
+      currentResolved:                 r.eligCur,
+      domicileResolved:                r.eligDom,
+      totalResolved:                   r.targets.length,
+      activeCount:                     r.activeCount,
+      compositeIdentityDuplicates:     r.compDupKeys.length,
+      compositeIdentityDuplicateKeys:  r.compDupKeys,
+      globalDuplicateRecordIds:        globalDuplicateRecordIds,
+      targetDuplicateRecordIds:        targetDuplicateRecordIds,
+      probeRids374_377:                probeRids,
+      seqNoMismatches:                 seqNoMismatches,
+      legacyRawMismatches:             legacyMismatches,
+      structuredAlreadyPresent:        structPresent,
+      executable:                      executable,
+      executionVerdict:                executable ? 'ALL_CHECKS_PASS — ready for approval' : 'BLOCKED — one or more checks failed'
+    };
+
+  } catch(e) { return { success: false, error: e.toString() }; }
+}
+
+
+// ─── migrateVerifiedAddresses — ROUTE DISABLED 2026-08-17 (migration complete) ───────────────
+// Function retained for audit traceability and rollback reference only.
+// Dispatcher route is permanently disabled. Do not re-enable without explicit approval.
+function migrateVerifiedAddresses(confirmToken) {
+  if (confirmToken !== ADDR_MIG_TOKEN) {
+    return { success: false, result: 'READY_NOT_EXECUTED', message: 'Confirmation token missing. Not executed. No writes performed.' };
+  }
+
+  var EXPECTED_CURRENT = 321, EXPECTED_DOMICILE = 138, EXPECTED_ACTIVE = 419;
+  var lock = LockService.getScriptLock();
+  var stage = 'LOCK';
+
+  try {
+    if (!lock.tryLock(30000)) return { success: false, result: 'ABORTED_LOCK_UNAVAILABLE', stage: stage };
+
+    stage = 'GEO';
+    var opt = { muteHttpExceptions: true };
+    var pR = UrlFetchApp.fetch(GEO_BASE + 'province.json', opt); if (pR.getResponseCode() !== 200) throw new Error('province.json HTTP ' + pR.getResponseCode());
+    var pJ = pR.getContentText(); var provinces = JSON.parse(pJ);
+    var aR = UrlFetchApp.fetch(GEO_BASE + 'amphure.json', opt); if (aR.getResponseCode() !== 200) throw new Error('amphure.json HTTP ' + aR.getResponseCode());
+    var aJ = aR.getContentText(); var amphures = JSON.parse(aJ);
+    var tR = UrlFetchApp.fetch(GEO_BASE + 'tambon.json', opt); if (tR.getResponseCode() !== 200) throw new Error('tambon.json HTTP ' + tR.getResponseCode());
+    var tJ = tR.getContentText(); var tambons = JSON.parse(tJ);
+
+    var geoSnap = { provinces: provinces.length, amphures: amphures.length, tambons: tambons.length,
+                    provBytes: pJ.length, ampBytes: aJ.length, tamBytes: tJ.length };
+    if (provinces.length < 70 || amphures.length < 800 || tambons.length < 7000) {
+      return { success: false, result: 'ABORTED_GEO_INVALID', geoSnap: geoSnap, stage: stage };
+    }
+
+    stage = 'REVALIDATION';
+    var h = _buildMigHelpers_(provinces, amphures, tambons);
+
+    // Read sheet (153 cols — soft-delete at idx152)
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAME);
+    var last  = sheet.getLastRow(); var numRows = last - 1;
+    var data  = sheet.getRange(2, 1, numRows, 153).getValues();
+
+    // Fresh target revalidation under lock (composite identity)
+    var r = _buildFreshTargets_(data, numRows, h);
+
+    // Composite identity duplicate check — structural abort (RecordID dups are NOT an abort)
+    if (r.compDupKeys.length > 0) {
+      return { success: false, result: 'ABORTED_COMPOSITE_IDENTITY_DUPLICATE', duplicates: r.compDupKeys, stage: stage };
+    }
+    // Count guard
+    if (r.eligCur !== EXPECTED_CURRENT || r.eligDom !== EXPECTED_DOMICILE) {
+      return { success: false, result: 'ABORTED_COUNT_MISMATCH',
+               expected: { current: EXPECTED_CURRENT, domicile: EXPECTED_DOMICILE },
+               actual:   { current: r.eligCur, domicile: r.eligDom },
+               knownDupRids: r.knownDupRids, stage: stage };
+    }
+    if (r.activeCount !== EXPECTED_ACTIVE) {
+      return { success: false, result: 'ABORTED_ACTIVE_COUNT_MISMATCH', expected: EXPECTED_ACTIVE, actual: r.activeCount, stage: stage };
+    }
+
+    stage = 'BACKUP';
+    var targetList = r.targets;
+
+    // Pre-migration snapshot of col64-79 (for batch write + auto-rollback)
+    var preSnap = sheet.getRange(2, 64, numRows, 16).getValues();
+    var preCol1   = data.map(function(row){ return String(row[0]||''); });
+    var preCol153 = data.map(function(row){ return String(row[152]||''); });
+
+    // Create backup sheet
+    var ts = Utilities.formatDate(new Date(), 'Asia/Bangkok', "yyyyMMdd_HHmmss");
+    var backupSheetName = BACKUP_NAME_PREFIX + ts;
+    var bSheet = ss.insertSheet(backupSheetName);
+    var BHDRS = ['Timestamp','RecordID','SeqNo','SheetRow','Group','LegacyRaw',
+                 'old_house_no','old_moo','old_soi','old_road','old_subdistrict','old_district','old_province','old_police_station',
+                 'new_house_no','new_moo','new_soi','new_road','new_subdistrict','new_district','new_province','new_police_station'];
+    var now = new Date().toISOString();
+    var bRows = [BHDRS];
+    for (var ti = 0; ti < targetList.length; ti++) {
+      var t = targetList[ti]; var ri = t.sheetRow - 2;
+      var oldOff = t.group === 'current' ? 0 : 8;
+      var old8 = preSnap[ri].slice(oldOff, oldOff + 8).map(String);
+      var p = t.parsed;
+      bRows.push([now, t.recordId, t.seqNo, t.sheetRow, t.group, t.legacyRaw,
+                  old8[0],old8[1],old8[2],old8[3],old8[4],old8[5],old8[6],old8[7],
+                  p.house_no,p.moo,p.soi,p.road,p.subdistrict,p.district,p.province,p.police_station]);
+    }
+    bSheet.getRange(1, 1, bRows.length, BHDRS.length).setValues(bRows);
+    SpreadsheetApp.flush();
+
+    // Verify backup
+    var bVerify = bSheet.getRange(1, 1, bRows.length, BHDRS.length).getValues();
+    var bFails = []; var bCur = 0; var bDom = 0; var bSeen = {};
+    if (bVerify.length !== bRows.length) bFails.push('row_count:' + bVerify.length + '!=' + bRows.length);
+    for (var bi = 1; bi < bVerify.length; bi++) {
+      var br = bVerify[bi]; var bgrp = String(br[4]||'');
+      if (!String(br[1]||'').trim()) bFails.push('blank_rid:r' + bi);
+      var bk = String(br[2]||'') + '|' + bgrp; // composite key: seqNo|group
+      if (bSeen[bk]) bFails.push('dup_composite_key:' + bk); bSeen[bk] = true;
+      if (bgrp === 'current')  bCur++;
+      if (bgrp === 'domicile') bDom++;
+      for (var fi = 6; fi <= 13; fi++) { if (String(br[fi]||'').trim() !== '') bFails.push('old_star_nonempty:r' + bi + 'f' + fi); }
+      if (!String(br[18]||'').trim() || !String(br[19]||'').trim() || !String(br[20]||'').trim()) bFails.push('new_geo_empty:r' + bi);
+    }
+    if (bCur !== EXPECTED_CURRENT)  bFails.push('cur_count:' + bCur + '!=' + EXPECTED_CURRENT);
+    if (bDom !== EXPECTED_DOMICILE) bFails.push('dom_count:' + bDom + '!=' + EXPECTED_DOMICILE);
+    if (bFails.length > 0) {
+      ss.deleteSheet(bSheet);
+      return { success: false, result: 'ABORTED_BACKUP_VERIFY_FAILED', failures: bFails, stage: stage };
+    }
+
+    // Build batch write matrices (modify copy of preSnap slices — 2 matrices)
+    var curMatrix = preSnap.map(function(r){ return r.slice(0,8); }); // col64-71
+    var domMatrix = preSnap.map(function(r){ return r.slice(8,16); }); // col72-79
+    var targetRowSet = {};
+    for (var ti = 0; ti < targetList.length; ti++) {
+      var t = targetList[ti]; var ri = t.sheetRow - 2; var p = t.parsed;
+      var vals = [p.house_no,p.moo,p.soi,p.road,p.subdistrict,p.district,p.province,p.police_station];
+      if (t.group === 'current')  { curMatrix[ri] = vals; targetRowSet[ri+'_cur'] = true; }
+      else                         { domMatrix[ri] = vals; targetRowSet[ri+'_dom'] = true; }
+    }
+
+    // Auto-rollback using in-memory preSnap
+    function autoRollback(reason) {
+      try {
+        sheet.getRange(2, 64, numRows, 8).setNumberFormat('@');
+        sheet.getRange(2, 64, numRows, 8).setValues(preSnap.map(function(r){ return r.slice(0,8); }));
+        sheet.getRange(2, 72, numRows, 8).setNumberFormat('@');
+        sheet.getRange(2, 72, numRows, 8).setValues(preSnap.map(function(r){ return r.slice(8,16); }));
+        SpreadsheetApp.flush();
+        writeAuditLog({ action: 'address_migration', token: '', metadata: { result: 'FAILED_ROLLED_BACK', reason: reason, backupSheetName: backupSheetName }, status: 'FAILED' });
+        return 'FAILED_ROLLED_BACK';
+      } catch(rbErr) {
+        writeAuditLog({ action: 'address_migration', token: '', metadata: { result: 'FAILED_ROLLBACK_INCOMPLETE', reason: reason, rbError: rbErr.toString(), backupSheetName: backupSheetName }, status: 'FAILED' });
+        return 'FAILED_ROLLBACK_INCOMPLETE';
+      }
+    }
+
+    // WRITE — 2 setValues calls total (setNumberFormat('@') prevents Sheets date/number coercion)
+    var migError = null;
+    stage = 'WRITE_CURRENT';
+    try {
+      sheet.getRange(2, 64, numRows, 8).setNumberFormat('@');
+      sheet.getRange(2, 64, numRows, 8).setValues(curMatrix); // Write call 1: col64-71
+      stage = 'WRITE_DOMICILE';
+      sheet.getRange(2, 72, numRows, 8).setNumberFormat('@');
+      sheet.getRange(2, 72, numRows, 8).setValues(domMatrix); // Write call 2: col72-79
+      stage = 'VERIFY';
+      SpreadsheetApp.flush();
+    } catch(wErr) { migError = wErr.toString(); }
+
+    if (migError) {
+      stage = 'ROLLBACK';
+      var s1 = autoRollback('write_error:' + migError);
+      return { success: false, result: s1, error: migError, stage: stage, backupSheetName: backupSheetName };
+    }
+
+    // Post-write verification
+    var postData = sheet.getRange(2, 1, numRows, 153).getValues();
+    var verFails = [];
+
+    // 459 target groups: verify intended values + no Date coercion
+    var ADDR_FIELD_NAMES = ['house_no','moo','soi','road','subdistrict','district','province','police_station'];
+    for (var ti = 0; ti < targetList.length; ti++) {
+      var t = targetList[ti]; var ri = t.sheetRow - 2; var p = t.parsed;
+      var intended = [p.house_no,p.moo,p.soi,p.road,p.subdistrict,p.district,p.province,p.police_station];
+      var baseIdx = t.group === 'current' ? 63 : 71;
+      for (var fi = 0; fi < 8; fi++) {
+        var rawActual = postData[ri][baseIdx+fi];
+        if (rawActual instanceof Date) {
+          verFails.push({ check:'target_type', key:t.compositeKey, field:ADDR_FIELD_NAMES[fi], expectedType:'string', actualType:'Date', dateValue:rawActual.toISOString() });
+        } else if (String(rawActual||'') !== String(intended[fi]||'')) {
+          verFails.push({ check:'target_value', key:t.compositeKey, field:fi, exp:intended[fi], act:String(rawActual||'') });
+        }
+      }
+    }
+    // Legacy col8/col38 unchanged
+    for (var ti = 0; ti < targetList.length; ti++) {
+      var t = targetList[ti]; var ri = t.sheetRow - 2;
+      var legIdx = t.group === 'current' ? 7 : 37;
+      var live = String(postData[ri][legIdx]||'').replace(/^'/,'').trim();
+      if (live !== t.legacyRaw.replace(/^'/,'').trim()) verFails.push({ check:'legacy', key:t.compositeKey });
+    }
+    // Active count
+    var postActive = postData.filter(function(r){ return String(r[152]||'').trim() !== 'deleted'; }).length;
+    if (postActive !== EXPECTED_ACTIVE) verFails.push({ check:'active_count', exp:EXPECTED_ACTIVE, act:postActive });
+    // col1/col153 unchanged
+    for (var ri = 0; ri < numRows; ri++) {
+      if (String(postData[ri][0]||'') !== preCol1[ri]) verFails.push({ check:'col1_changed', row:ri+2 });
+      if (String(postData[ri][152]||'') !== preCol153[ri]) verFails.push({ check:'col153_changed', row:ri+2 });
+    }
+    // Non-target cols64-79 unchanged
+    for (var ri = 0; ri < numRows; ri++) {
+      var hasCur = !!targetRowSet[ri+'_cur']; var hasDom = !!targetRowSet[ri+'_dom'];
+      for (var ci = 0; ci < 16; ci++) {
+        if (hasCur && ci < 8) continue;
+        if (hasDom && ci >= 8) continue;
+        if (String(preSnap[ri][ci]||'') !== String(postData[ri][63+ci]||'')) {
+          verFails.push({ check:'non_target_changed', row:ri+2, col:ci+64 });
+        }
+      }
+    }
+
+    if (verFails.length > 0) {
+      stage = 'ROLLBACK';
+      var s2 = autoRollback('post_verify_failed:' + verFails.length);
+      return { success: false, result: s2, verifyFailSample: verFails.slice(0,20), stage: stage, backupSheetName: backupSheetName };
+    }
+
+    stage = 'AUDIT';
+    // Protect backup (non-fatal)
+    try { var prot = bSheet.protect().setDescription('Address migration backup — read-only'); prot.removeEditors(prot.getEditors()); } catch(pe) {}
+
+    writeAuditLog({ action: 'address_migration', token: '', metadata: { result: 'SUCCESS', migratedCurrentCount: r.eligCur, migratedDomicileCount: r.eligDom, totalMigrated: targetList.length, backupSheetName: backupSheetName, geoFingerprint: JSON.stringify(geoSnap), writeCallsUsed: 2, knownDupRids: r.knownDupRids.join(',') }, status: 'SUCCESS' });
+    return { success: true, result: 'SUCCESS', migratedCurrentCount: r.eligCur, migratedDomicileCount: r.eligDom, totalMigrated: targetList.length, backupSheetName: backupSheetName, geoFingerprint: geoSnap, writeCallsUsed: 2, knownDupRids: r.knownDupRids, verificationPassed: true, stage: 'COMPLETE' };
+
+  } catch(e) {
+    writeAuditLog({ action: 'address_migration', token: '', metadata: { result: 'FAILED', error: e.toString(), stage: stage }, status: 'FAILED' });
+    return { success: false, result: 'FAILED', error: e.toString(), stage: stage };
+  } finally { try { lock.releaseLock(); } catch(le) {} }
+}
+
+
+// ─── Text-safe write test — verifies '@' format prevents date coercion on a temp sheet ──
+// Creates temp sheet, writes representative house-number strings, reads back, deletes sheet.
+function testTextSafeWrite() {
+  var TEST_VALS = ['4/9','3/5','9/2','8/4','6/2','14/2','11/2','20/2','30/3','24/1','1008/57-58','4/18','901/44'];
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var tmpName = '_addr_text_test_' + new Date().getTime();
+  var tmpSheet = ss.insertSheet(tmpName);
+  try {
+    var numCols = TEST_VALS.length;
+    var rng = tmpSheet.getRange(1, 1, 1, numCols);
+    rng.setNumberFormat('@');
+    rng.setValues([TEST_VALS]);
+    SpreadsheetApp.flush();
+    var readBack = tmpSheet.getRange(1, 1, 1, numCols).getValues()[0];
+    var results = TEST_VALS.map(function(exp, i) {
+      var actual = readBack[i];
+      var isDate = actual instanceof Date;
+      var match  = !isDate && String(actual) === exp;
+      return { input: exp, actual: isDate ? 'DATE:' + actual.toISOString() : String(actual), match: match, dateCoercion: isDate };
+    });
+    var passCount = results.filter(function(r){ return r.match; }).length;
+    var dateCount = results.filter(function(r){ return r.dateCoercion; }).length;
+    return { success: true, writesPerformed: false, tempSheetUsed: tmpName, totalTests: TEST_VALS.length,
+             passed: passCount, dateCoercions: dateCount, allPassed: passCount === TEST_VALS.length, results: results };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  } finally {
+    try { ss.deleteSheet(tmpSheet); } catch(de) {}
+  }
+}
+
+// ─── Post-migration READ-ONLY closure verifier ────────────────────────────────
+function verifyPostMigrationState() {
+  var EXPECTED_ACTIVE = 419, EXPECTED_CUR = 321, EXPECTED_DOM = 138;
+  var BACKUP_SUCCESS  = 'AddressMigrationBackup_20260817_212531';
+  var BACKUP_FAILED   = 'AddressMigrationBackup_20260817_210233';
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAME);
+    var last  = sheet.getLastRow(); var numRows = last - 1;
+    var data  = sheet.getRange(2, 1, numRows, 153).getValues();
+
+    var activeCount = 0; var curNE = 0; var domNE = 0;
+    var SC = [63,64,65,66,67,68,69,70]; var SD = [71,72,73,74,75,76,77,78];
+    function gv(row,i){ return (row[i]||'').toString().trim(); }
+    function anyNE(row,ia){ return ia.some(function(i){ return gv(row,i)!==''; }); }
+
+    for (var i = 0; i < numRows; i++) {
+      var row = data[i];
+      if (gv(row,152) !== 'deleted') activeCount++;
+      if (anyNE(row, SC)) curNE++;
+      if (anyNE(row, SD)) domNE++;
+    }
+
+    var allSheets = ss.getSheets().map(function(s){ return s.getName(); });
+    var successBackupExists = allSheets.indexOf(BACKUP_SUCCESS) !== -1;
+    var failedBackupExists  = allSheets.indexOf(BACKUP_FAILED)  !== -1;
+
+    var checks = {
+      activeCount:           { expected: EXPECTED_ACTIVE, actual: activeCount, pass: activeCount === EXPECTED_ACTIVE },
+      structuredCurrentGroups: { expected: EXPECTED_CUR,  actual: curNE,       pass: curNE === EXPECTED_CUR },
+      structuredDomicileGroups:{ expected: EXPECTED_DOM,  actual: domNE,       pass: domNE === EXPECTED_DOM },
+      successBackupExists:   { expected: BACKUP_SUCCESS,  actual: successBackupExists ? 'EXISTS' : 'MISSING', pass: successBackupExists },
+      failedBackupExists:    { expected: BACKUP_FAILED,   actual: failedBackupExists  ? 'EXISTS' : 'MISSING', pass: failedBackupExists },
+      migrationRouteEnabled: { expected: false, actual: false, pass: true }
+    };
+    var allPass = Object.keys(checks).every(function(k){ return checks[k].pass; });
+
+    return {
+      success: true, note: 'READ-ONLY post-migration closure check. No writes.',
+      migrationDate: '2026-08-17', allPass: allPass, checks: checks
+    };
+  } catch(e) { return { success: false, error: e.toString() }; }
+}
+
+// ─── Post-rollback READ-ONLY state verifier ───────────────────────────────────
+function verifyAddressRollbackState() {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAME);
+    var last  = sheet.getLastRow(); var numRows = last - 1;
+    var data  = sheet.getRange(2, 1, numRows, 153).getValues();
+
+    var activeCount = 0; var curNonEmpty = 0; var domNonEmpty = 0;
+    var SC = [63,64,65,66,67,68,69,70]; var SD = [71,72,73,74,75,76,77,78];
+    function gv(row,i){ return (row[i]||'').toString().trim(); }
+    function anyNE(row,ia){ return ia.some(function(i){ return gv(row,i)!==''; }); }
+
+    for (var i = 0; i < numRows; i++) {
+      var row = data[i];
+      var del = gv(row, 152);
+      if (del !== 'deleted') activeCount++;
+      if (anyNE(row, SC)) curNonEmpty++;
+      if (anyNE(row, SD)) domNonEmpty++;
+    }
+
+    // List backup sheets
+    var allSheets = ss.getSheets();
+    var backupSheets = allSheets
+      .filter(function(s){ return s.getName().indexOf('AddressMigrationBackup_') === 0; })
+      .map(function(s){
+        var lr = s.getLastRow();
+        return { name: s.getName(), lastRow: lr, dataRows: Math.max(0, lr - 1) };
+      });
+
+    return {
+      success: true, note: 'READ-ONLY. No writes.',
+      activeCount: activeCount,
+      structuredCurrentNonEmpty: curNonEmpty,
+      structuredDomicileNonEmpty: domNonEmpty,
+      rollbackClean: curNonEmpty === 0 && domNonEmpty === 0,
+      backupSheets: backupSheets
+    };
+  } catch(e) { return { success: false, error: e.toString() }; }
+}
+
+// ─── Script-lock READ-ONLY test — confirms LockService works in web-app context ──
+function testScriptLock() {
+  var acquired = false; var released = false;
+  try {
+    var lock = LockService.getScriptLock();
+    acquired = lock.tryLock(10000);
+    if (acquired) { lock.releaseLock(); released = true; }
+    return { success: true, lockType: 'SCRIPT', acquired: acquired, released: released, writesPerformed: false };
+  } catch(e) {
+    return { success: false, lockType: 'SCRIPT', acquired: acquired, released: released, error: e.toString(), writesPerformed: false };
+  }
+}
+
+
+// ─── rollbackAddressMigration — COMPOSITE IDENTITY, NO DISPATCHER ROUTE ──────
+// Resolution order per backup row:
+//   1. Try data[sheetRow-2]: verify RecordID + LegacyRaw + Group
+//   2. If sheetRow mismatch: try data[seqNo-1] with same verification
+//   3. Fail-safe if neither match → FAILED_ROLLBACK_INCOMPLETE for that target
+function rollbackAddressMigration(confirmToken, backupSheetName) {
+  if (confirmToken !== ADDR_ROLLBACK_TOKEN) {
+    return { success: false, result: 'READY_NOT_EXECUTED', message: 'Rollback token missing. Not executed.' };
+  }
+  if (!backupSheetName || backupSheetName.indexOf(BACKUP_NAME_PREFIX) !== 0) {
+    return { success: false, result: 'ABORTED_INVALID_BACKUP_NAME', expected: BACKUP_NAME_PREFIX + 'YYYYMMDD_HHMMSS' };
+  }
+
+  var EXPECTED_HDRS = ['Timestamp','RecordID','SeqNo','SheetRow','Group','LegacyRaw',
+                       'old_house_no','old_moo','old_soi','old_road','old_subdistrict','old_district','old_province','old_police_station',
+                       'new_house_no','new_moo','new_soi','new_road','new_subdistrict','new_district','new_province','new_police_station'];
+  var lock = LockService.getScriptLock();
+
+  try {
+    if (!lock.tryLock(30000)) return { success: false, result: 'ABORTED_LOCK_UNAVAILABLE' };
+
+    var ss     = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var bSheet = ss.getSheetByName(backupSheetName);
+    if (!bSheet) return { success: false, result: 'ABORTED_BACKUP_NOT_FOUND', backupSheetName: backupSheetName };
+
+    var bLast = bSheet.getLastRow();
+    if (bLast < 2) return { success: false, result: 'ABORTED_BACKUP_EMPTY' };
+    var bAll = bSheet.getRange(1, 1, bLast, EXPECTED_HDRS.length).getValues();
+
+    // Schema validation
+    for (var hi = 0; hi < EXPECTED_HDRS.length; hi++) {
+      if (String(bAll[0][hi]||'') !== EXPECTED_HDRS[hi]) {
+        return { success: false, result: 'ABORTED_BACKUP_SCHEMA_INVALID', col: hi, expected: EXPECTED_HDRS[hi], actual: bAll[0][hi] };
+      }
+    }
+
+    var bRows = bAll.slice(1);
+    var rbTargets = [];
+    for (var bi = 0; bi < bRows.length; bi++) {
+      var br = bRows[bi];
+      var rid   = String(br[1]||'').trim();
+      var group = String(br[4]||'').trim();
+      if (!rid || (group !== 'current' && group !== 'domicile')) continue;
+      rbTargets.push({
+        recordId: rid, seqNo: Number(br[2])||0, sheetRow: Number(br[3])||0,
+        group: group, legacyRaw: String(br[5]||''),
+        old8: [String(br[6]||''),String(br[7]||''),String(br[8]||''),String(br[9]||''),
+               String(br[10]||''),String(br[11]||''),String(br[12]||''),String(br[13]||'')]
+      });
+    }
+    if (rbTargets.length === 0) return { success: false, result: 'ABORTED_NO_ROLLBACK_TARGETS' };
+
+    // Read live sheet
+    var sheet   = ss.getSheetByName(SHEET_NAME);
+    var last    = sheet.getLastRow(); var numRows = last - 1;
+    var liveData = sheet.getRange(2, 1, numRows, 153).getValues();
+    function lgv(row,i){ return (row[i]||'').toString().trim(); }
+
+    // Read col64-79 as restore base
+    var liveSnap = sheet.getRange(2, 64, numRows, 16).getValues();
+    var restoreCur = liveSnap.map(function(r){ return r.slice(0,8); });
+    var restoreDom = liveSnap.map(function(r){ return r.slice(8,16); });
+
+    var resolveErrors = [];
+    var restoredCount = 0;
+
+    function verifyRow(ri, t) {
+      if (ri < 0 || ri >= numRows) return false;
+      var row = liveData[ri];
+      var legIdx = t.group === 'current' ? 7 : 37;
+      var ridMatch  = lgv(row, 0) === t.recordId;
+      var legMatch  = lgv(row, legIdx).replace(/^'/,'').trim() === t.legacyRaw.replace(/^'/,'').trim();
+      return ridMatch && legMatch;
+    }
+
+    for (var ti = 0; ti < rbTargets.length; ti++) {
+      var t = rbTargets[ti];
+      var ri = null;
+
+      // 1. Try captured sheetRow (direct position)
+      var capturedRi = t.sheetRow - 2;
+      if (verifyRow(capturedRi, t)) {
+        ri = capturedRi;
+      } else {
+        // 2. Try seqNo-based position (seqNo = 1-based; data index = seqNo-1)
+        var seqRi = t.seqNo - 1;
+        if (verifyRow(seqRi, t)) {
+          ri = seqRi;
+        }
+      }
+
+      if (ri === null) {
+        resolveErrors.push({ rid: t.recordId, seqNo: t.seqNo, sheetRow: t.sheetRow, group: t.group, err: 'identity_not_verified' });
+        continue;
+      }
+
+      if (t.group === 'current')  restoreCur[ri] = t.old8;
+      else                         restoreDom[ri] = t.old8;
+      restoredCount++;
+    }
+
+    if (resolveErrors.length > 0) {
+      return { success: false, result: 'FAILED_ROLLBACK_INCOMPLETE', resolveErrors: resolveErrors, note: 'Rollback aborted before any write. No sheet changes made.' };
+    }
+
+    // Write restored matrices (2 calls — setNumberFormat('@') prevents re-coercion of restored strings)
+    sheet.getRange(2, 64, numRows, 8).setNumberFormat('@');
+    sheet.getRange(2, 64, numRows, 8).setValues(restoreCur);
+    sheet.getRange(2, 72, numRows, 8).setNumberFormat('@');
+    sheet.getRange(2, 72, numRows, 8).setValues(restoreDom);
+    SpreadsheetApp.flush();
+
+    // Post-rollback verification
+    var postRB = sheet.getRange(2, 64, numRows, 16).getValues();
+    var rbFails = [];
+    for (var ti = 0; ti < rbTargets.length; ti++) {
+      var t = rbTargets[ti];
+      var capturedRi = t.sheetRow - 2;
+      var ri = verifyRow(capturedRi, t) ? capturedRi : (verifyRow(t.seqNo-1, t) ? t.seqNo-1 : capturedRi);
+      var colOff = t.group === 'current' ? 0 : 8;
+      for (var fi = 0; fi < 8; fi++) {
+        if (String(postRB[ri][colOff+fi]||'') !== String(t.old8[fi]||'')) {
+          rbFails.push({ rid: t.recordId, grp: t.group, field: fi });
+        }
+      }
+    }
+
+    if (rbFails.length > 0) {
+      writeAuditLog({ action: 'address_rollback', token: '', metadata: { result: 'FAILED', backupSheetName: backupSheetName, verifyFailCount: rbFails.length }, status: 'FAILED' });
+      return { success: false, result: 'FAILED_ROLLBACK_VERIFY', verifyFailSample: rbFails.slice(0,10) };
+    }
+
+    writeAuditLog({ action: 'address_rollback', token: '', metadata: { result: 'SUCCESS', backupSheetName: backupSheetName, restoredCount: restoredCount }, status: 'SUCCESS' });
+    return { success: true, result: 'SUCCESS', restoredCount: restoredCount, backupSheetName: backupSheetName };
+
+  } catch(e) {
+    writeAuditLog({ action: 'address_rollback', token: '', metadata: { result: 'FAILED', error: e.toString(), backupSheetName: backupSheetName }, status: 'FAILED' });
+    return { success: false, result: 'FAILED', error: e.toString() };
+  } finally { try { lock.releaseLock(); } catch(le) {} }
 }

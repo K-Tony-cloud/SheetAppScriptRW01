@@ -2392,8 +2392,22 @@
             '<div class="col-md-4"><div class="detail-label">บิดา:</div><div class="detail-value">' + v(105) + (row[106] ? ' / ' + fixMissingZero(row[106],'phone') : '') + '</div></div>' +
             '<div class="col-md-4"><div class="detail-label">มารดา:</div><div class="detail-value">' + v(107) + (row[108] ? ' / ' + fixMissingZero(row[108],'phone') : '') + '</div></div>' +
             '<div class="col-md-4"><div class="detail-label">ผู้ปกครอง:</div><div class="detail-value">' + v(109) + (row[110] ? ' / ' + fixMissingZero(row[110],'phone') : '') + '</div></div>' +
-            '<div class="col-12"><div class="detail-label">ที่อยู่ปัจจุบัน:</div>' + addrBlock([63,64,65,66,67,68,69,70]) + '</div>' +
-            '<div class="col-12"><div class="detail-label">ที่อยู่ภูมิลำเนา:</div>' + addrBlock([71,72,73,74,75,76,77,78]) + '</div>' +
+            (function(){
+              var si = [63,64,65,66,67,68,69,70];
+              var hasS = si.some(function(i){ return row[i] && String(row[i]).trim() !== ''; });
+              if (hasS) return '<div class="col-12"><div class="detail-label">ที่อยู่ปัจจุบัน:</div>' + addrBlock([63,64,65,66,67,68,69,70]) + '</div>';
+              var leg = (row[7] || '').toString().replace(/^'/, '').trim();
+              if (leg) return '<div class="col-12"><div class="detail-label">ที่อยู่ปัจจุบัน: <span class="badge bg-warning text-dark ms-1 fw-normal" style="font-size:.7em">ข้อมูลเดิม</span></div><div class="detail-value">' + leg + '</div></div>';
+              return '<div class="col-12"><div class="detail-label">ที่อยู่ปัจจุบัน:</div><div class="detail-value">-</div></div>';
+            })() +
+            (function(){
+              var si = [71,72,73,74,75,76,77,78];
+              var hasS = si.some(function(i){ return row[i] && String(row[i]).trim() !== ''; });
+              if (hasS) return '<div class="col-12"><div class="detail-label">ที่อยู่ภูมิลำเนา:</div>' + addrBlock([71,72,73,74,75,76,77,78]) + '</div>';
+              var leg = (row[37] || '').toString().replace(/^'/, '').trim();
+              if (leg) return '<div class="col-12"><div class="detail-label">ที่อยู่ภูมิลำเนา: <span class="badge bg-warning text-dark ms-1 fw-normal" style="font-size:.7em">ข้อมูลเดิม</span></div><div class="detail-value">' + leg + '</div></div>';
+              return '<div class="col-12"><div class="detail-label">ที่อยู่ภูมิลำเนา:</div><div class="detail-value">-</div></div>';
+            })() +
             '<div class="col-md-4"><div class="detail-label">ติดต่อสำรอง:</div><div class="detail-value">' + v(24) + '</div></div>' +
             '<div class="col-md-4"><div class="detail-label">เกี่ยวข้องเป็น:</div><div class="detail-value">' + v(25) + '</div></div>' +
             '<div class="col-md-4"><div class="detail-label">เบอร์สำรอง:</div><div class="detail-value">' + phone2 + '</div></div>' +
